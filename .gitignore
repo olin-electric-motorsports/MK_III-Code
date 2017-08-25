@@ -1,0 +1,38 @@
+build/
+obj/
+
+# Object files
+*.o
+*.ko
+*.obj
+*.elf
+
+# Precompiled Headers
+*.lib
+*.a
+*.la
+*.lo
+
+# Shared Objects
+*.dll
+*.so
+*.so.*
+*.dylib
+
+# Executables
+*.exe
+*.out
+*.app
+*.i*86
+*.x86_64
+*.hex
+
+# Debug Files
+*.dSYM/
+*.su
+
+# For the VIM Users
+*.swp
+
+# FOr the Mac Users
+*.DS_Store
