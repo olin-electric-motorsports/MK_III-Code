@@ -61,6 +61,19 @@ Basically it consists of multiple project pages where you can track the progress
 *Projects Page Example*
 
 
+## Tutorials
+New to Formula or moved to a different subteam? Read and follow along with these tutorials and you can learn a whole bunch about electrical systems and embedded hardware. 
+
+#### Electrical
+Learn electricity [here...]()
+
+#### Programing Embedded Hardware
+Learn that [here...](https://github.com/olin-electric-motorsports/Embedded_Tutorials)
+
+#### Github
+Learn how to git gud [here...](https://github.com/olin-electric-motorsports/Programming_Tutorials/tree/master/GeneralTutorials/Learn_Git)
+
+
 ## Useful Links
 -[How does Git/Github Work?](http://product.hubspot.com/blog/git-and-github-tutorial-for-beginners)
 
