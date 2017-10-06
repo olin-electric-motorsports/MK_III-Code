@@ -23,14 +23,14 @@ Basically it consists of multiple project pages where you can track the progress
 ## Tutorials
 New to Formula or moved to a different subteam? Read and follow along with these tutorials and you can learn a whole bunch about electrical systems and embedded hardware. 
 
-#### Electrical
-Learn electricity [here...]()
+#### Learn C
+Learn C [here...](https://github.com/olin-electric-motorsports/C_Tutorials)
 
 #### Programing Embedded Hardware
-Learn that [here...](https://github.com/olin-electric-motorsports/Embedded_Tutorials)
+Learn that [here...](https://github.com/olin-electric-motorsports/Programming_Tutorials)
 
 #### Github
-Learn how to git gud [here...](https://github.com/olin-electric-motorsports/Programming_Tutorials/tree/master/GeneralTutorials/Learn_Git)
+Learn how to git gud [here...](https://github.com/olin-electric-motorsports/Programming_Tutorials/tree/master/GitTutorials)
 
 
 ## Useful Links
