@@ -2,7 +2,7 @@
 The official repository for all code on the MK III Car for Olin Electric Motorsports
 
 ## How to Github?
-What a good question! Read Byron's tutorial on Git [here](://github.com/olin-electric-motorsports/Programming_Tutorials/blob/master/GitTutorials/CheatSheet.md)
+What a good question! Read Byron's tutorial on Git [here](https://github.com/olin-electric-motorsports/Programming_Tutorials/blob/master/GitTutorials/CheatSheet.md)
 
 ## Build Chain
 We are currently still figuring our our build chain, so it's coming...trust us!
