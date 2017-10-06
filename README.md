@@ -1,6 +1,13 @@
 # MK III Code
 The official repository for all code on the MK III Car for Olin Electric Motorsports
 
+## Setting Up
+To install all the necessary dependencies and liraries, run the `setup.sh` script below.
+This already knows what you need to download, so it does all the work for you. All you need to do is type `y` when prompted to allow it to download.
+```
+$ bash setup.sh
+```
+
 ## How to Github?
 What a good question! Read Byron's tutorial on Git [here](https://github.com/olin-electric-motorsports/Programming_Tutorials/blob/master/GitTutorials/CheatSheet.md)
 
