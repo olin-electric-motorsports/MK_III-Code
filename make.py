@@ -13,8 +13,11 @@ OBJCOPY = 'avr-objcopy'
 MCU = 'atmega16m1'
 F_CPU = '4000000UL'
 COMPILER = 'gnu99'
+FUSE = '0x62'
 
 CFLAGS = '-Os -g -mmcu=' + MCU + ' -std=' + COMPILER + ' -Wall -Werror -ff'
+LDFLAG = '-mmcu=' + MCU + '-lm'
+AVRFLAGS = '-p ' + MCU + ' -v -c ' + PROGRAMMER + ' -p ' + PORT
 
 possible_boards = ['Dashboard','BMS','Blinky']
 
@@ -51,11 +54,51 @@ def make_elf(board, test, libs, head):
     out = 'cc '
     for item in c_files:
         out = out + str(item) + (' ')
+    out = out + '-o ' + board + '.elf'
     print(out)
+    outs = 'outs/'
+    os.chdir(outs)
+    file = open('test', 'a')    #DEBUG
+    file.write(out)             #DEBUG
+    file.close()                #DEBUG
     os.chdir(head)
+
+
+def make_hex(board, test, libs, head):
+    '''
+    Takes the elf output files and turns them into hex output
+    '''
+    # $(BUIDIR)/%.hex: $(BUIDIR)/%.elf
+    # $(OBJCOPY) -O ihex -R .eeprom $< $@
+    outs = 'outs/'
+    os.chdir(test)
+    os.chdir(outs)
+    elf = glob.glob('*.elf')
+    out = OBJCOPY + ' -O ihex -R .eeprom ' + elf + ' ' + board +'.hex'
+
+
+
+def flash_board(board, test, libs, head):
+    '''
+    Takes hex files and uses ARVDUDE w/ ARVFLAGS to flash code onto board
+    '''
+    # flash: $(BUIDIR)/$(TARGET).hex
+    # sudo $(AVRDUDE) $(AVRFLAGS) -U flash:w:$<
+
+def set_fuse():
+    '''
+    Uses ARVDUDE w/ ARVFLAGS to set the fuse
+    '''
+    # sudo $(AVRDUDE) $(AVRFLAGS) -U hfuse:w:0xDF:m
+
 
 if __name__ == "__main__":
     # possible_boards = find_board()  # Go through all the folders and find the boards
+
+    # TODO
+    '''
+    -Make argc input when file called and setup logic flow for flashing, clean, and board building
+    '''
     cwd = os.getcwd()
 
     board, flash = get_input()
