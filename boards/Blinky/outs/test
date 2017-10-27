@@ -1,1 +1,6 @@
 cc main.c -o Blinky.elf
+avr-objcopy -O ihex -R .eeprom test.elf Blinky.hex
+cc main.c -o Blinky.elf
+avr-objcopy -O ihex -R .eeprom test.elf Blinky.hex
+cc main.c -o Blinky.elf
+avr-objcopy -O ihex -R .eeprom test.elf Blinky.hex

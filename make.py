@@ -1,3 +1,13 @@
+'''
+The official build chain for the 2017-2018 Olin Electric Motorsports FSAE Formula Team
+For more information on the team: https://www.olinelectricmotorsports.com/
+
+@author: Peter Seger '20
+
+Released under MIT License 2017
+'''
+
+
 import glob
 import os
 import re
@@ -21,6 +31,7 @@ AVRFLAGS = '-p ' + MCU + ' -v -c ' + PROGRAMMER + ' -p ' + PORT
 
 possible_boards = ['Dashboard','BMS','Blinky']
 
+
 def get_input():
     board = input("Board (i.e. Dashboard): ")
     flash = input("Flash (y/n): ")
@@ -35,9 +46,24 @@ def get_input():
 
     return board, flash
 
+
+def build_boards_list(boards, head):
+    '''
+    Goes through the /boards directory and adds each board to a list
+    '''
+    os.chdir(boards)
+    boards = []
+    bds = glob.glob('*')
+    for el in bds:
+        boards.append(el)
+    os.chdir(head)
+    return boards
+
+
 def make_libs():
     libs = os.listdir('./lib/')
     return libs
+
 
 def ensure_setup(board, test, head):
     t = os.listdir(test)
@@ -59,8 +85,9 @@ def make_elf(board, test, libs, head):
     outs = 'outs/'
     os.chdir(outs)
     file = open('test', 'a')    #DEBUG
-    file.write(out)             #DEBUG
+    file.write(out+"\n")        #DEBUG
     file.close()                #DEBUG
+    # os.system(out)            #Write command to system
     os.chdir(head)
 
 
@@ -74,7 +101,12 @@ def make_hex(board, test, libs, head):
     os.chdir(test)
     os.chdir(outs)
     elf = glob.glob('*.elf')
-    out = OBJCOPY + ' -O ihex -R .eeprom ' + elf + ' ' + board +'.hex'
+    out = OBJCOPY + ' -O ihex -R .eeprom ' + elf[0] + ' ' + board +'.hex'
+    file = open('test', 'a')    #DEBUG
+    file.write(out+"\n")        #DEBUG
+    file.close()                #DEBUG
+    # os.system(out)            #Write command to system
+    os.chdir(head)
 
 
 
@@ -84,17 +116,23 @@ def flash_board(board, test, libs, head):
     '''
     # flash: $(BUIDIR)/$(TARGET).hex
     # sudo $(AVRDUDE) $(AVRFLAGS) -U flash:w:$<
+    os.chdir(test)
+    hex_file = glob.glob('*.hex')
+    out = 'sudo ' + AVRDUDE + ' ' + AVRFLAGS + ' -U flash:v:' + hex_file
+    print(out)          #DEBUG
+    # os.system(out)      #Write command to systems
+
 
 def set_fuse():
     '''
     Uses ARVDUDE w/ ARVFLAGS to set the fuse
     '''
-    # sudo $(AVRDUDE) $(AVRFLAGS) -U hfuse:w:0xDF:m
+    out = 'sudo ' + AVRDUDE + ' ' + AVRFLAGS + ' -U hfuse:w:' + FUSE + ':m'
+    print(out)          #DEBUG
+    # os.system(out)            #Write command to system
 
 
 if __name__ == "__main__":
-    # possible_boards = find_board()  # Go through all the folders and find the boards
-
     # TODO
     '''
     -Make argc input when file called and setup logic flow for flashing, clean, and board building
@@ -103,11 +141,15 @@ if __name__ == "__main__":
 
     board, flash = get_input()
 
+    boards = './boards/'
+    boards_list = build_boards_list(boards, cwd)    # Get a list of all boards
+
     test = './boards/%s/'%board
 
     ensure_setup(board, test, cwd)
     libs = make_libs()
     make_elf(board, test, libs, cwd)
+    make_hex(board, test, libs, cwd)
     # make_hex(board)
 
     # if(flash == 'y'):
