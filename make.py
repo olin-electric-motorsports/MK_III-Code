@@ -22,26 +22,27 @@ PORT = 'usb'
 AVRDUDE = 'avrdude'
 OBJCOPY = 'avr-objcopy'
 MCU = 'atmega16m1'
+PART = 'm16m1'
 F_CPU = '4000000UL'
 COMPILER = 'gnu99'
 FUSE = '0x62'
 
 CFLAGS = '-Os -g -mmcu=' + MCU + ' -std=' + COMPILER + ' -Wall -Werror -ff'
 LDFLAG = '-mmcu=' + MCU + ' -lm'
-AVRFLAGS = '-p ' + MCU + ' -v -c ' + PROGRAMMER + ' -p ' + PORT
+AVRFLAGS = '-p ' + MCU + ' -v -c ' + PROGRAMMER + ' -p ' + PART
 
-possible_boards = ['Dashboard','BMS','Blinky']
+possible_boards = ['Dashboard','BMS','Blinky']  # TODO change to figure all boards
 
 
 def get_input():
     board = input("Board (i.e. Dashboard): ")
-    flash = input("Flash (y/n): ")
+    flash = input("Flash (y/n) or Set Fuses(fuses): ")
 
     # Test Inputs
     if board not in possible_boards:
         print("Not a possible board -%s-"%(board))
         quit()
-    if flash != 'y' and flash !='n':
+    if flash != 'y' and flash != 'n' and flash != 'fuses':
         print("Not a possible flash setting -" + flash)
         quit()
 
@@ -128,7 +129,8 @@ def flash_board(board, test, libs, head):
     # flash: $(BUIDIR)/$(TARGET).hex
     # sudo $(AVRDUDE) $(AVRFLAGS) -U flash:w:$<
     os.chdir(test)
-    hex_file = glob.glob('*.hex')
+    os.chdir('outs/')
+    hex_file = glob.glob('*.hex')[0]
     out = 'sudo ' + AVRDUDE + ' ' + AVRFLAGS + ' -U flash:v:' + hex_file
     # print(out)          #DEBUG
     os.system(out)      #Write command to systems
@@ -165,6 +167,10 @@ if __name__ == "__main__":
 
     board, flash = get_input()
 
+    if(flash == 'fuses'):
+        set_fuse()
+        exit()
+
     boards = './boards/'
     boards_list = build_boards_list(boards, cwd)    # Get a list of all boards
 
@@ -177,20 +183,5 @@ if __name__ == "__main__":
     make_hex(board, test, libs, cwd)
     # make_hex(board)
 
-    # if(flash == 'y'):
-        # flash_board()
-
-
-    # test = './boards/%s/'%board
-    # t = os.listdir(test)
-
-
-    '''
-    os.chdir(test)
-    os.system('ls')
-    os.system('make clean')
-    os.chdir('..')
-    os.system('ls')
-    '''
-    # os.chdir('boards/')
-    # os.system('mkdir hello')
+    if(flash == 'y'):
+        flash_board(board, test, libs, cwd)
