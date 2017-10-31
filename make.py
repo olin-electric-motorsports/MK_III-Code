@@ -13,9 +13,10 @@ import os
 import re
 import sys
 import subprocess
+import shutil
 
 
-CC = 'gcc'
+CC = 'avr-gcc'
 PROGRAMMER = 'avrispmkII'
 PORT = 'usb'
 AVRDUDE = 'avrdude'
@@ -26,7 +27,7 @@ COMPILER = 'gnu99'
 FUSE = '0x62'
 
 CFLAGS = '-Os -g -mmcu=' + MCU + ' -std=' + COMPILER + ' -Wall -Werror -ff'
-LDFLAG = '-mmcu=' + MCU + '-lm'
+LDFLAG = '-mmcu=' + MCU + ' -lm'
 AVRFLAGS = '-p ' + MCU + ' -v -c ' + PROGRAMMER + ' -p ' + PORT
 
 possible_boards = ['Dashboard','BMS','Blinky']
@@ -60,8 +61,10 @@ def build_boards_list(boards, head):
     return boards
 
 
-def make_libs():
-    libs = os.listdir('./lib/')
+def make_libs(head):
+    os.chdir('./lib/')
+    libs = glob.glob('*.c')
+    os.chdir(head)
     return libs
 
 
@@ -77,17 +80,25 @@ def make_elf(board, test, libs, head):
     os.chdir(test)
     c_files = glob.glob('*.c')
     h_files = glob.glob('*.h')
-    out = 'cc '
+    os.system('ls')
+    out = CC + ' '
+    includes = ''
     for item in c_files:
-        out = out + str(item) + (' ')
-    out = out + '-o ' + board + '.elf'
+        includes = includes + str(item) + (' ')
+    out = out + includes + LDFLAG + ' -o ' + board + '.elf'
     print(out)
     outs = 'outs/'
-    os.chdir(outs)
-    file = open('test', 'a')    #DEBUG
-    file.write(out+"\n")        #DEBUG
-    file.close()                #DEBUG
-    # os.system(out)            #Write command to system
+    # file = open('test', 'a')    #DEBUG
+    # file.write(out+"\n")        #DEBUG
+    # file.close()                #DEBUG
+    os.system(out)            #Write command to system
+    # elf = glob.glob('*.elf')[0]
+    # src = test + elf
+    # dest = test + 'outs/' + elf
+    # shutil.move(src, dest)
+    cmd = 'mv *.elf outs/'
+    os.system(cmd)
+    # os.chdir(outs)
     os.chdir(head)
 
 
@@ -102,10 +113,10 @@ def make_hex(board, test, libs, head):
     os.chdir(outs)
     elf = glob.glob('*.elf')
     out = OBJCOPY + ' -O ihex -R .eeprom ' + elf[0] + ' ' + board +'.hex'
-    file = open('test', 'a')    #DEBUG
-    file.write(out+"\n")        #DEBUG
-    file.close()                #DEBUG
-    # os.system(out)            #Write command to system
+    # file = open('test', 'a')    #DEBUG
+    # file.write(out+"\n")        #DEBUG
+    # file.close()                #DEBUG
+    os.system(out)            #Write command to system
     os.chdir(head)
 
 
@@ -119,8 +130,8 @@ def flash_board(board, test, libs, head):
     os.chdir(test)
     hex_file = glob.glob('*.hex')
     out = 'sudo ' + AVRDUDE + ' ' + AVRFLAGS + ' -U flash:v:' + hex_file
-    print(out)          #DEBUG
-    # os.system(out)      #Write command to systems
+    # print(out)          #DEBUG
+    os.system(out)      #Write command to systems
 
 
 def set_fuse():
@@ -128,8 +139,21 @@ def set_fuse():
     Uses ARVDUDE w/ ARVFLAGS to set the fuse
     '''
     out = 'sudo ' + AVRDUDE + ' ' + AVRFLAGS + ' -U hfuse:w:' + FUSE + ':m'
-    print(out)          #DEBUG
-    # os.system(out)            #Write command to system
+    # print(out)          #DEBUG
+    os.system(out)            #Write command to system
+
+def clean(board, test, head):
+    '''
+    Goes into given directory and deletes all output files for a clean build
+    '''
+    outs = 'outs/'
+    os.chdir(test)
+    os.chdir(outs)
+    files = glob.glob('*')
+    for f in files:
+        os.remove(f)
+    os.chdir(head)
+    print('Clean Build for %s'%(board))
 
 
 if __name__ == "__main__":
@@ -147,7 +171,8 @@ if __name__ == "__main__":
     test = './boards/%s/'%board
 
     ensure_setup(board, test, cwd)
-    libs = make_libs()
+    libs = make_libs(cwd)
+    clean(board, test, cwd)
     make_elf(board, test, libs, cwd)
     make_hex(board, test, libs, cwd)
     # make_hex(board)
