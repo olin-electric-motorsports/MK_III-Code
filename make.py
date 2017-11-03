@@ -140,7 +140,7 @@ def set_fuse():
     '''
     Uses ARVDUDE w/ ARVFLAGS to set the fuse
     '''
-    out = 'sudo ' + AVRDUDE + ' ' + AVRFLAGS + ' -U hfuse:w:' + FUSE + ':m'
+    out = 'sudo ' + AVRDUDE + ' ' + AVRFLAGS + ' -U lfuse:w:' + FUSE + ':m'
     # print(out)          #DEBUG
     os.system(out)            #Write command to system
 
