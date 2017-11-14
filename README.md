@@ -8,24 +8,23 @@ This already knows what you need to download, so it does all the work for you. A
 $ bash setup.sh
 ```
 
-## How to Github?
-What a good question! Read Byron's tutorial on Git [here](https://github.com/olin-electric-motorsports/Programming_Tutorials/blob/master/GitTutorials/CheatSheet.md)
+## How to Flash a Board
+Once you've designed your fancy PCB, you probably want to write some code that goes on it. Here's how you do it:
+-Navigate to the head of the MK_III-Code repo.
+```
+$ python3 make.py
+```
+-Type in the name of the board you want to flash. The name must match exactly to the name of the folder containing the board.
+```
+$ Board (i.e. Dashboard): Blinky
+```
+-Select if you want to flash it or if you want to set the fuses.
+```
+$ Flash (y/n) or Set Fuses(fuses): y
+```
+You should see a whole bunch of information fly across your screen. This is the AVRDude reading back to you what is going on. You can ignore it, unless stuff breaks, then it's nice to look back and see what broke and when.
 
-## Build Chain
-We are currently still figuring our our build chain, so it's coming...trust us!
-
-## Github Projects
-This year we will be using Github projects to track our software progress throughout the year. You can learn more about it [here](https://help.github.com/articles/about-project-boards/) but it's very similar to [trello](null "If you've ever used that...").
-
-
-![Projects Overview](/documentation/imgs/projects_overview.png)
-*Projects Overview*
-
-Basically it consists of multiple project pages where you can track the progress of that project. Since OEM has such a large and broad scope of projects, I've attempted to simplify this by only having a few projects going on, but each project will probably have multiple sub-projects within it. We don't know if this will work for us or not, so your advice would be appreciated.
-
-![Projects Page Example](/documentation/imgs/projects_example.png)
-*Projects Page Example*
-
+If you're curious as to what is actually going on 'behind the scenes', I've written a short articles explaining how it.
 
 ## Tutorials
 New to Formula or moved to a different subteam? Read and follow along with these tutorials and you can learn a whole bunch about electrical systems and embedded hardware. 
