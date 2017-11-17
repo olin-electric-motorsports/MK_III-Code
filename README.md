@@ -8,6 +8,8 @@ This already knows what you need to download, so it does all the work for you. A
 $ bash setup.sh
 ```
 
+Once you've run the setup script, make a folder in the 'boards' folder with the name of your board. Once you're in your folder, make a C document named something like `boardname.c` or `main.c`. 
+
 ## How to Flash a Board
 Once you've designed your fancy PCB, you probably want to write some code that goes on it. Here's how you do it:
 -Navigate to the head of the MK_III-Code repo.

@@ -14,6 +14,7 @@ import re
 import sys
 import subprocess
 import shutil
+import time
 
 
 CC = 'avr-gcc'
@@ -35,7 +36,7 @@ possible_boards = []
 
 
 def get_input():
-    board = input("Board (i.e. Dashboard): ")
+    board = input("Board (i.e. Dashboard) or build All (all): ")
     flash = input("Flash (y/n) or Set Fuses(fuses): ")
     return board, flash
 
@@ -60,16 +61,16 @@ def make_libs(head):
     return libs
 
 
-def ensure_setup(board, test, head):
-    t = os.listdir(test)
+def ensure_setup(board, dir, head):
+    t = os.listdir(dir)
     if 'outputs' not in t:
-        os.chdir(test)
+        os.chdir(dir)
         os.system('mkdir outs')
         os.chdir(head)
 
 
-def make_elf(board, test, libs, head):
-    os.chdir(test)
+def make_elf(board, dir, libs, head):
+    os.chdir(dir)
     c_files = glob.glob('*.c')
     h_files = glob.glob('*.h')
     os.system('ls')
@@ -86,12 +87,12 @@ def make_elf(board, test, libs, head):
     os.chdir(head)
 
 
-def make_hex(board, test, libs, head):
+def make_hex(board, dir, libs, head):
     '''
     Takes the elf output files and turns them into hex output
     '''
     outs = 'outs/'
-    os.chdir(test)
+    os.chdir(dir)
     os.chdir(outs)
     elf = glob.glob('*.elf')
     out = OBJCOPY + ' -O ihex -R .eeprom ' + elf[0] + ' ' + board +'.hex'
@@ -100,11 +101,11 @@ def make_hex(board, test, libs, head):
 
 
 
-def flash_board(board, test, libs, head):
+def flash_board(board, dir, libs, head):
     '''
     Takes hex files and uses ARVDUDE w/ ARVFLAGS to flash code onto board
     '''
-    os.chdir(test)
+    os.chdir(dir)
     os.chdir('outs/')
     hex_file = glob.glob('*.hex')[0]
     out = 'sudo ' + AVRDUDE + ' ' + AVRFLAGS + ' -U flash:w:' + hex_file
@@ -118,18 +119,60 @@ def set_fuse():
     out = 'sudo ' + AVRDUDE + ' ' + AVRFLAGS + ' -U lfuse:w:' + FUSE + ':m'
     os.system(out)            #Write command to system
 
-def clean(board, test, head):
+def clean(board, dir, head):
     '''
     Goes into given directory and deletes all output files for a clean build
     '''
     outs = 'outs/'
-    os.chdir(test)
+    os.chdir(dir)
     os.chdir(outs)
     files = glob.glob('*')
     for f in files:
         os.remove(f)
     os.chdir(head)
     print('Clean Build for %s'%(board))
+
+def check_build_date(board, dir, head):
+    # TODO
+    '''
+    Checks to see whether or not the .c or .h files have been modified since the time
+    when the output files were made. If not, it returns false otherwise it returns true
+    to indicate the need to rebuild
+    '''
+    sub_head = dir
+    os.chdir(dir + 'outs/')
+    outs = glob.glob('*')
+    if len(outs) < 2:      # No output files made, assumed new board or error
+        os.chdir(head)
+        return True
+    else:
+        out_time = os.path.getctime(outs[0])
+        os.chdir(dir)
+        c_files = glob.glob('*.c')
+        h_files = glob.glob('*.h')
+        if len(c_files) < 1:
+            print('No C files found at %s',dir)
+            os.chdir(head)
+            return True
+        else:
+            c_time = os.path.getctime(files[0])
+            # if <= c_time <
+
+        print(out_time)
+        os.chdir(head)
+
+def make_all(head, boards):
+    board_head = './boards/'
+    for board in boards:
+        dir = './boards/%s/'%board
+        ensure_setup(board, dir, cwd)
+        libs = make_libs(cwd)
+        clean(board, dir, cwd)
+        make_elf(board, dir, libs, cwd)
+        make_hex(board, dir, libs, cwd)
+    print('-------------------------------------')
+    print('Build successful! No boards flashed.')
+    os.chdir(head)
 
 
 if __name__ == "__main__":
@@ -138,26 +181,31 @@ if __name__ == "__main__":
     -Make argc input when file called and setup logic flow for flashing, clean, and board building
     '''
     cwd = os.getcwd()
-
-    board, flash = get_input()
-
-    if(flash == 'fuses'):
-        set_fuse()
-        exit()
-
     boards = './boards/'
     possible_boards = build_boards_list(boards, cwd)    # Get a list of all boards
 
-    if board in possible_boards:
-        test = './boards/%s/'%board
-
-        ensure_setup(board, test, cwd)
-        libs = make_libs(cwd)
-        clean(board, test, cwd)
-        make_elf(board, test, libs, cwd)
-        make_hex(board, test, libs, cwd)
-
-        if(flash == 'y'):
-            flash_board(board, test, libs, cwd)
+    board = input("Board (i.e. Dashboard) or build All (all): ")
+    if(board == 'all'):
+        make_all(cwd, possible_boards)
     else:
-        print("Not a possible board --%s--"%(board))
+        flash = input("Flash (y/n) or Set Fuses(fuses): ")
+
+        if(flash == 'fuses'):
+            set_fuse()
+            exit()
+
+        if board in possible_boards:
+            dir = './boards/%s/'%board
+
+            # check_build_date(board, dir, cwd)
+
+            ensure_setup(board, dir, cwd)
+            libs = make_libs(cwd)
+            clean(board, dir, cwd)
+            make_elf(board, dir, libs, cwd)
+            make_hex(board, dir, libs, cwd)
+
+            if(flash == 'y'):
+                flash_board(board, dir, libs, cwd)
+        else:
+            print("Not a possible board --%s--"%(board))
