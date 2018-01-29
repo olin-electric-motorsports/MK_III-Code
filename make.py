@@ -29,7 +29,7 @@ COMPILER = 'gnu99'
 FUSE = '0x62'
 
 CFLAGS = '-Os -g -mmcu=' + MCU + ' -std=' + COMPILER + ' -Wall -Werror -ff'
-LDFLAG = '-mmcu=' + MCU + ' -lm'
+LDFLAG = '-mmcu=' + MCU + ' -lm -std=c99'
 AVRFLAGS = '-p -B2 ' + MCU + ' -v -c ' + PROGRAMMER + ' -p ' + PART
 
 possible_boards = []
@@ -175,6 +175,27 @@ def make_all(head, boards):
     os.chdir(head)
 
 
+def get_includes(head, board):
+    '''
+    This function gathers all the header files from the lib folder for building
+    '''
+    out  = 'cp lib/* %s'%board
+    os.system(out)
+
+def remove_includes(head, board):
+    '''
+    This function removes the lib files from the directory
+    '''
+    os.chdir(head + '/lib/')
+    includes = glob.glob('*')
+    os.chdir(head)
+    os.chdir(board)
+    out = 'rm '
+    for x in includes:
+        out = out + x + ' '
+    os.system(out)
+
+
 if __name__ == "__main__":
     # TODO
     '''
@@ -202,8 +223,10 @@ if __name__ == "__main__":
             ensure_setup(board, dir, cwd)
             libs = make_libs(cwd)
             clean(board, dir, cwd)
+            get_includes(cwd, dir)
             make_elf(board, dir, libs, cwd)
             make_hex(board, dir, libs, cwd)
+            remove_includes(cwd, dir)
 
             if(flash == 'y'):
                 flash_board(board, dir, libs, cwd)
