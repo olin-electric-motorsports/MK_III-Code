@@ -17,6 +17,10 @@ Author:
 #include <string.h>
 #include <avr/io.h>
 #include <avr/interrupt.h>
+#include <avr/wdt.h>
+#include "LTC_defs.h"
+#include "can_api.h"
+#include "main.h"
 
 /*----- Macro Definitions -----*/
 #define MACRO_1     1
