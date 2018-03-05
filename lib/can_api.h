@@ -6,32 +6,36 @@
 #include <avr/interrupt.h>
 #include <stdlib.h>
 
-/* Message IDs */
-#define CAN_IDT_GLOBAL            ((uint16_t) 0x00)
-#define CAN_IDT_PANIC             ((uint16_t) 0x01)
+/* Message Identifiers */
+#define CAN_ID_GLOBAL            ((uint16_t) 0x00)
+#define CAN_ID_PANIC             ((uint16_t) 0x01)
 
-#define CAN_IDT_THROTTLE          ((uint16_t) 0x0B)
-#define CAN_IDT_BMS_MASTER        ((uint16_t) 0x0C)
-#define CAN_IDT_AIR_CONTROL       ((uint16_t) 0x0D)
-#define CAN_IDT_TRANSOM           ((uint16_t) 0x0E)
-#define CAN_IDT_LIQUID_COOLING    ((uint16_t) 0x0F)
-#define CAN_IDT_DASHBOARD         ((uint16_t) 0x10)
-#define CAN_IDT_CHARGING          ((uint16_t) 0x11)
-#define CAN_IDT_MSP               ((uint16_t) 0x12)
+#define CAN_ID_BRAKE_LIGHT       ((uint16_t) 0x0B)
+#define CAN_ID_THROTTLE           ((uint16_t) 0x0C)
+#define CAN_ID_AIR_CONTROL       ((uint16_t) 0x0D)
+#define CAN_ID_DASHBOARD         ((uint16_t) 0x0E)
+#define CAN_ID_WHEELSPEED        ((uint16_t) 0x0F)
+#define CAN_ID_SUSPENSION        ((uint16_t) 0x10)
+#define CAN_ID_BMS_MASTER        ((uint16_t) 0x11)
+#define CAN_ID_BMS_TEMP          ((uint16_t) 0x12)
+#define CAN_ID_BMS_VOLT          ((uint16_t) 0x13)
+
 
 
 /* Message Lengths */
-#define CAN_IDT_GLOBAL_L          ((uint16_t) 8)
-#define CAN_IDT_PANIC_L           ((uint16_t) 1)
+#define CAN_LEN_GLOBAL          ((uint16_t) 8)
+#define CAN_LEN_PANIC           ((uint16_t) 1)
 
-#define CAN_IDT_THROTTLE_L        ((uint16_t) 7)
-#define CAN_IDT_BMS_MASTER_L      ((uint16_t) 8)
-#define CAN_IDT_AIR_CONTROL_L     ((uint16_t) 8)
-#define CAN_IDT_TRANSOM_L         ((uint16_t) 1)
-#define CAN_IDT_LIQUID_COOLING_L  ((uint16_t) 1)
-#define CAN_IDT_DASHBOARD_L       ((uint16_t) 8)
-#define CAN_IDT_CHARGING_L        ((uint16_t) 2)
-#define CAN_IDT_MSP_L             ((uint16_t) 5)
+#define CAN_LEN_BRAKE_LIGHT     ((uint16_t) 8)
+#define CAN_LEN_THROTTLE        ((uint16_t) 5)
+#define CAN_LEN_AIR_CONTROL     ((uint16_t) 4)
+#define CAN_LEN_DASHBOARD       ((uint16_t) 1)
+#define CAN_LEN_WHEELSPEED      ((uint16_t) 4)
+#define CAN_LEN_SUSPENSION      ((uint16_t) 6)
+#define CAN_LEN_BMS_MASTER      ((uint16_t) 5)
+#define CAN_LEN_BMS_TEMP        ((uint16_t) 8)
+#define CAN_LEN_BMS_VOLT        ((uint16_t) 8)
+
 
 
 /* Masks */
