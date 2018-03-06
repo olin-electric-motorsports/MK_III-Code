@@ -19,53 +19,67 @@ Author:
 #include <avr/interrupt.h>
 
 /*----- Macro Definitions -----*/
-// Shutdown
+/* Shutdown */
 #define GLOBAL_SHUTDOWN         0x0
 
-// Brake
+/* Brake */
 #define BRAKE_PIN               PC7 //TODO Analog Brake INPUT
 #define BRAKE_PORT              PORTC //TODO
 #define BRAKE_LIGHT_PIN         PD2 //TODO Analog Brake Light OUTPUT
 #define BRAKE_LIGHT_PORT        PORTD //TODO
 
-// BSPD Status Output
+/* BSPD Status Output */
 #define BSPD_STATUS_PIN         PC3 //TODO
 #define BSPD_STATUS_PORT        PORTC //TODO
 
-// Sense Lines
-#define SD_MAIN_FUSE		//TODO Main Fuse
-#define SD_LEFT_E_STOP		//TODO Left E-Stop
-#define SD_RIGHT_E_STOP		//TODO Right E-Stop
-#define SD_BSPD     		//TODO BSPD
-#define SD_HVD      		//TODO HVD
-#define SD_TSMS     		//TODO TSMS
-#define PORT_MAIN_FUSE
-#define PORT_LEFT_E_STOP
-#define PORT_RIGHT_E_STOP
-#define PORT_BSPD
-#define PORT_HVD
-#define PORT_TSMS
-#define CAN_MAIN_FUSE
-#define CAN_LEFT_E_STOP
-#define CAN_RIGHT_E_STOP
-#define CAN_BSPD
-#define CAN_HVD
-#define CAN_TSMS
+/* Sense Lines */
+#define SD_MAIN_FUSE		PB0
+#define SD_LEFT_E_STOP		PB1
+#define SD_RIGHT_E_STOP		PD5
+#define SD_BSPD     		PD6 //TODO CHECK?
+#define SD_HVD      		PD7 //TODO CHECK?
+#define SD_TSMS     		PB2 //TODO CHECK?
 
-// Sense LEDs
-/* Might be irrelevant because the gStatusBar */
-#define LED1                PB6 //TODO (Purpose)
-#define LED2                PB6 //TODO (Purpose)
-#define LED3                PB6 //TODO (Purpose)
-#define LED4                PB6 //TODO (Purpose)
-#define LED5                PB6 //TODO (Purpose)
-#define LED6                PB6 //TODO (Purpose)
-#define PORT_LED1           PB6 //TODO (Purpose)
-#define PORT_LED2           PB6 //TODO (Purpose)
-#define PORT_LED3           PB6 //TODO (Purpose)
-#define PORT_LED4           PB6 //TODO (Purpose)
-#define PORT_LED5           PB6 //TODO (Purpose)
-#define PORT_LED6           PB6 //TODO (Purpose)
+#define PORT_MAIN_FUSE      PORTB
+#define PORT_LEFT_E_STOP    PORTB
+#define PORT_RIGHT_E_STOP   PORTD
+#define PORT_BSPD           PORTD
+#define PORT_HVD            PORTD
+#define PORT_TSMS           PORTB
+
+/* CAN Positions */
+#define CAN_BRAKE           0
+#define CAN_BREAK_POS       1
+#define CAN_BSPD            2
+#define CAN_HVD             3
+#define CAN_TSMS            4
+#define CAN_LEFT_E_STOP     5
+#define CAN_RIGHT_E_STOP    6
+#define CAN_MAIN_FUSE       7
+
+#define BROADCAST_MOb       0
+#define //todo readboards
+
+/* Sense LEDs */
+// Might be irrelevant because the gStatusBar
+#define EXT_LED1            PD0 //TODO (Debug LED on RJ45)
+#define EXT_LED2            PC0 //TODO (Debug LED on RJ45)
+#define LED1                PB6 //TODO (Purpose - on LED bar)
+#define LED2                PB6 //TODO (Purpose - on LED bar)
+#define LED3                PB6 //TODO (Purpose - on LED bar)
+#define LED4                PB6 //TODO (Purpose - on LED bar)
+#define LED5                PB6 //TODO (Purpose - on LED bar)
+#define LED6                PB6 //TODO (Purpose - on LED bar)
+
+#define PORT_EXT_LED1       PORTD //TODO (Debug LED on RJ45)
+#define PORT__EXT_LED2      PORTC //TODO (Debug LED on RJ45)
+#define PORT_LED1           PB6 //TODO (Purpose - on LED bar)
+#define PORT_LED2           PB6 //TODO (Purpose - on LED bar)
+#define PORT_LED3           PB6 //TODO (Purpose - on LED bar)
+#define PORT_LED4           PB6 //TODO (Purpose - on LED bar)
+#define PORT_LED5           PB6 //TODO (Purpose - on LED bar)
+#define PORT_LED4           PB6 //TODO (Purpose - on LED bar)
+
 
 
 /*----- Global Variables -----*/
@@ -77,7 +91,8 @@ unit8_t gStatusBar[6] = {0, 0, 0, 0, 0, 0};         // LED status bar
 volatile unit8_t gTSMS = 0x00;
 volatile unit8_t gTSMS_OLD = 0x00;  // Used for comparison
 
-#define SEND_MSG       0       // Used for timer to send CAN msgs
+#define UPDATE_STATUS   0
+#define SEND_MSG        0       // Used for timer to send CAN msgs
 #define TSMS_STATUS     1       // Used to track changes in TSMS
 
 unit8_t clock_prescale = 0x00;  // Used for timer
@@ -101,6 +116,14 @@ ISR(CAN_INT_vect) {
 ISR(PCINT0_vect) {
     /*
     Standard Pin Change Interupt
+    covers interupts 0-2
+    */
+}
+
+ISR(PCINT2_vect) {
+    /*
+    Standard Pin Change Interupt
+    covers interupts 21-23
     */
 }
 
@@ -116,11 +139,19 @@ ISR(TIMER0_COMPA_vect) {
 
 
 /*----- Functions -----*/
-void initTimer(void) {
+void initTimer_8bit(void) {
     TCCR0A = _BV(WGM01);    // Set up 8-bit timer in CTC mode
     TCCR0B = 0x05;          // clkio/1024 prescaler
     TIMSK0 |= _BV(OCIE0A);
     OCR0A = 0xFF;
+}
+
+static inline void read_pins(void) {
+    if(bit_is_clear()) {
+        gCAN_MSG[] = 0xFF;
+    } else {
+        gCAN_MSG[] = 0x00;
+    }
 }
 
 void checkShutdownState(void)   {
@@ -154,6 +185,29 @@ int main(void){
     -Wait on CAN
     -Infinite loop checking shutdown state!
     */
+    sei();                              // Enable interupts
 
-    initTimer();
+    /* Setup interupt registers */
+    PCICR |= _BV(PCIE0) | _BV(PCI2);
+    PCMSK0 |= _BV(PCINT0) | _BV(PCINT1) | _BV(PCINT2);
+    PCMSK2 |= _BV(PCINT21) | _BV(PCINT22) | _BV(PCINT23);
+
+    initTimer_8bit();                   // Begin 8-bit timer
+
+    gFlag |= _BV(UPDATE_STATUS);        // Read ports
+
+    while(1) {
+        if(bit_is_set(gFlag, UPDATE_STATUS)) {
+            PORT_EXT_LED1 ^= _BV(EXT_LED1);     // Blink LED1 for timing check
+
+            read_pins();                // Update all pin values
+
+            CAN_transmit(BROADCAST_MOb, CAN_ID_BRAKE_LIGHT,
+                CAN_LEN_BRAKE_LIGHT, gCAN_MSG);
+
+            gFlag &= ~_BV(UPDATE_STATUS);
+        }
+
+        if(bit_is_set(gFlag, ))
+    }
 }

@@ -69,7 +69,7 @@ unit8_t gPRECHARGE_TIMER = 0x00;
 
 #define UPDATE_STATUS 	0
 #define SET_PRECHARGE 	1
-#define SET_AIR		2
+#define SET_AIR         2
 
 unit8_t clock_prescale = 0x00;
 
@@ -88,7 +88,7 @@ ISR(TIMER0-COMPA-vect) {
     clock_prescale++;
 
 
-    /* Precharge Timer 
+    /* Precharge Timer
 	-Turns on precharge
 	-Waits 200 cycles
 	-Turns off precharge & sets AIR */
@@ -181,9 +181,9 @@ int main(void){
 
 	    read_pins();			// Update all pin values
 
-	    CAN_transmit(BROADCAST_MOb, CAN_IDT_AIR_CONTROL,
+	    CAN_transmit(BROADCAST_MOb, CAN_ID_AIR_CONTROL,
 			    CAN_IDT_AIR_CONTROL_L, gCAN_MSG);
-	
+
 	    gFlag &= ~_BV(UPDATE_STATUS);
 	}
 

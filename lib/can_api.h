@@ -11,7 +11,7 @@
 #define CAN_ID_PANIC             ((uint16_t) 0x01)
 
 #define CAN_ID_BRAKE_LIGHT       ((uint16_t) 0x0B)
-#define CAN_ID_THROTTLE           ((uint16_t) 0x0C)
+#define CAN_ID_THROTTLE          ((uint16_t) 0x0C)
 #define CAN_ID_AIR_CONTROL       ((uint16_t) 0x0D)
 #define CAN_ID_DASHBOARD         ((uint16_t) 0x0E)
 #define CAN_ID_WHEELSPEED        ((uint16_t) 0x0F)
