@@ -13,6 +13,6 @@ int main (void) {
         
 
         // Give a delay to the toggle so it doesn't infinitely toggle
-        _delay_ms(1000);
+        _delay_ms(100);
     }
 }

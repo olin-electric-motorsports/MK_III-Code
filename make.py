@@ -194,6 +194,7 @@ def remove_includes(head, board):
     for x in includes:
         out = out + x + ' '
     os.system(out)
+    os.chdir(head)
 
 
 if __name__ == "__main__":
