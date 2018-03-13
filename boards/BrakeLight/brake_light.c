@@ -115,15 +115,15 @@ ISR(CAN_INT_vect) {
 
 ISR(PCINT0_vect) {
     /*
-    Standard Pin Change Interupt
-    covers interupts 0-2
+    Standard Pin Change Intertupt
+    covers interrupts 0-2
     */
 }
 
 ISR(PCINT2_vect) {
     /*
-    Standard Pin Change Interupt
-    covers interupts 21-23
+    Standard Pin Change Interrupt
+    covers interrupts 21-23
     */
 }
 
@@ -185,9 +185,9 @@ int main(void){
     -Wait on CAN
     -Infinite loop checking shutdown state!
     */
-    sei();                              // Enable interupts
+    sei();                              // Enable interrupts
 
-    /* Setup interupt registers */
+    /* Setup interrupt registers */
     PCICR |= _BV(PCIE0) | _BV(PCI2);
     PCMSK0 |= _BV(PCINT0) | _BV(PCINT1) | _BV(PCINT2);
     PCMSK2 |= _BV(PCINT21) | _BV(PCINT22) | _BV(PCINT23);

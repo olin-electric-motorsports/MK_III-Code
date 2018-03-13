@@ -168,7 +168,7 @@ static inline void read_pins(void) {
 
 /*----- MAIN -----*/
 int main(void){
-    sei();					// Enable interupts
+    sei();					// Enable interrupts
 
     initTimer_8bit();				// Set up 8-bit timer
 
