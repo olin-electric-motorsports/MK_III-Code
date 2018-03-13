@@ -1,7 +1,7 @@
 /**********************************************************
 This is the base document for getting started with writing
 firmware for OEM.
-TODO delete before submitting
+TODO delete before submittin
 **********************************************************/
 
 /*
@@ -10,6 +10,13 @@ Header:
 Author:
     @author
 */
+
+
+/* TODO */
+/*
+    - Add sensing display integration
+    - Add brake position sending
+/*
 
 /*----- Includes -----*/
 #include <stdio.h>
@@ -58,7 +65,7 @@ Author:
 #define CAN_MAIN_FUSE       7
 
 #define BROADCAST_MOb       0
-#define //todo readboards
+#define //TODO readboards
 
 /* Sense LEDs */
 // Might be irrelevant because the gStatusBar
@@ -79,6 +86,13 @@ Author:
 #define PORT_LED4           PB6 //TODO (Purpose - on LED bar)
 #define PORT_LED5           PB6 //TODO (Purpose - on LED bar)
 #define PORT_LED4           PB6 //TODO (Purpose - on LED bar)
+
+#define STATUS_MAIN_FUSE    0
+#define STATUS_LEFT_E_STOP  1
+#define STATUS_RIGHT_E_STOP 2
+#define STATUS_BSPD         3
+#define STATUS_HVD          4
+#define STATUS_TSMS         5
 
 
 
@@ -115,16 +129,20 @@ ISR(CAN_INT_vect) {
 
 ISR(PCINT0_vect) {
     /*
-    Standard Pin Change Intertupt
-    covers interrupts 0-2
+    Standard Pin Change Interupt
+    covers interupts 0-2
+    Interupts covered: Main Shutdown Fuse, Left E-Stop, & TSMS
     */
+    // TODO do we need?
 }
 
 ISR(PCINT2_vect) {
     /*
-    Standard Pin Change Interrupt
-    covers interrupts 21-23
+    Standard Pin Change Interupt
+    covers interupts 21-23
+    Interupts covered: Rright E-Stop, BSPD, HVD
     */
+    // TODO do we need?
 }
 
 // 8-bit Timer
@@ -147,10 +165,48 @@ void initTimer_8bit(void) {
 }
 
 static inline void read_pins(void) {
-    if(bit_is_clear()) {
-        gCAN_MSG[] = 0xFF;
+
+    /* Build CAN Message */
+    if(bit_is_clear(PORT_MAIN_FUSE, SD_MAIN_FUSE)) {
+        gCAN_MSG[CAN_MAIN_FUSE] = 0xFF;     // Electrical signal is low (meaning fuse is set)
     } else {
-        gCAN_MSG[] = 0x00;
+        gCAN_MSG[CAN_MAIN_FUSE] = 0x00;
+    }
+
+    if(bit_is_clear(PORT_LEFT_E_STOP, SD_LEFT_E_STOP)) {
+        gCAN_MSG[CAN_LEFT_E_STOP] = 0xFF;
+    } else {
+        gCAN_MSG[CAN_LEFT_E_STOP] = 0x00;
+    }
+
+    if(bit_is_clear(PORT_RIGHT_E_STOP, SD_RIGHT_E_STOP)) {
+        gCAN_MSG[CAN_RIGHT_E_STOP] = 0xFF;
+    } else {
+        gCAN_MSG[CAN_RIGHT_E_STOP] = 0x00;
+    }
+
+    if(bit_is_clear(PORT_BSPD, SD_BSPD)) {
+        gCAN_MSG[CAN_BSPD] = 0xFF;
+    } else {
+        gCAN_MSG[CAN_BSPD] = 0x00;
+    }
+
+    if(bit_is_clear(PORT_HVD, SD_HVD)) {
+        gCAN_MSG[CAN_HVD] = 0xFF;
+    } else {
+        gCAN_MSG[CAN_HVD] = 0x00;
+    }
+
+    if(bit_is_clear(PORT_TSMS, SD_TSMS)) {
+        gCAN_MSG[CAN_TSMS] = 0xFF;
+    } else {
+        gCAN_MSG[CAN_TSMS] = 0x00;
+    }
+
+    if(bit_is_clear(BRAKE_PORT, BRAKE_PIN)) {
+        gCAN_MSG[CAN_BRAKE] = 0xFF;
+    } else {
+        gCAN_MSG[CAN_BRAKE] = 0x00;
     }
 }
 
@@ -207,7 +263,5 @@ int main(void){
 
             gFlag &= ~_BV(UPDATE_STATUS);
         }
-
-        if(bit_is_set(gFlag, ))
     }
 }
