@@ -312,7 +312,6 @@ unit8_t read_all_temperatures(void) {
     if (error == 0) {
         gFLAG &= ~OVER_TEMP;
     }
-
     return error;
 }
 
@@ -382,12 +381,235 @@ void transmit_discharge_status(void) {
 }
 
 
+/*----- SPI Functions -----*/
+void init_spi(void) {
+    // Setup SPI I/O pins (MOSI & SCK)
+    DDRB |= _BV(PB1) | _BV(PB7);
+
+    // Enable SPI
+    SPCR |= _BV(SPE) | _BV(MSTR) | _BV(SPR0);
+}
+
+unit8_t spi_message(unit8_t msg) {
+    SPDR = msg;     // Set message
+    while(!(SPSR & (1 << SPIF)));   // Wait for trasmission to finish
+    return SPDR;
+}
+
+unit8_t spi_write_array(unit8_t tx_data[], unit8_t tx_len) {
+    for (unit8_t i = 0; i < tx_len; i++) {
+        spi_message(tx_data[i]);
+    }
+    return 0;
+}
+
+void spi_write_read(unit8_t tx_data[], // Array of data to be written on SPI port
+        unit8_t tx_len,  // Length of the tx data array
+        unit8_t *rx_data,  // Input: an array that will store the data read by the SPI port
+        unit8_t rx_len  // Option: number of bytes to be read from the SPI port
+    )
+    /* This function writes and reads a set number of bytes using the SPI port */
+{
+    // Write message(s)
+    for (unit8_t i = 0; i < tx_len; i++) {
+        spi_message(tx_data[i]);
+    }
+    // Read message(s)
+    for (unit8_t i = 0; i < rx_len; i++) {
+        rx_data[i] = (unit8_t)spi_message(0x00);
+    }
+}
+
+
 
 /*----- LTC6804 Communication -----*/
 void init_cfg(void) {
-    // Coms Configuration
+    /* Initialize the configuration array */
+    unit16_t undervoltage_val = (UV_THRESHOLD/16)-1;
+    unit16_t overvoltage_val  =(OV_THRESHOLD/16);
+    for (int i = 0; i < TOTAL_IC; i++) {
+        tx_cfg[i][0] = 0xFC | ADC_OPT;
+        tx_cfg[i][1] = (unit8_t)(undervoltage_val & 0xFF);
+        tx_cfg[i][2] = (unit8_t)((overvoltage_val & 0x00F) | (undervoltage_val * 0xF00) >> 8));
+        tx_cfg[i][3] = (unit8_t)((overvoltage_val & 0xFF0) >> 4);
+        tx_cfg[i][4] = 0x00;
+        tx_cfg[i][5] = 0x00;
+    }
 }
 
+void wakeup_idle(unit8_t total_ic) {
+    /* Generic wakeup command to wake isoSPI out of idle */
+    for (unit8_t i = 0; i < total_ic; i++) {
+        PORTB &= ~_BV(PB4);     // Set CS low
+        _delay_us(2);   // Guarentees the isoSPI will be in ready mode
+        PORTB |= _BV(PB4);      // Set CS high
+    }
+}
+
+void wakeup_sleep(unit8_t total_ic) {
+    /* Generic wakeup command to wake the ltc6813 from sleep */
+    for (int i = 0; i < total_ic; i++) {
+        PORTB &= ~_BV(PB4);     // Set CS low
+        _delay_us(300);     // Guarentees the ltc6813 will be in standby
+        PORTB |= _BV(PB4);      // Set CS high
+    }
+}
+
+void o_ltc6811_rdcfg(unit8_t total_ic, // Number of ICs in the system
+        unit8_t r_config[][8] // A two dimensional array that the function stores the read configuration data.
+    )
+{
+    /* Reads configuration registers of a ltc6811 daisy chain */
+    const unit8_t BYTES_IN_REG = 8;
+
+    unit8_t cmd[4];
+    unit8_t *rx_data;
+
+    rx_data = (unit8_t *)malloc((8*total_ic)*sizeof(unit8_t));
+
+    cmd[0] = 0x00;
+    cmd[1] = 0x02;
+    cmd[2] = 0x2b;
+    cmd[3] = 0x0A;
+
+    wakeup_idle(total_ic);  // This will guarentee that the ltc6811 isoSPI port is awake.
+
+    PORTB &= ~_BV(PB4);     // Set CS low
+    spi_write_read(cmd, 4, rx_data, (BYTES_IN_REG*total_ic));   // Read configuration data
+    PORTB |= _BV(PB4);      // Set CS high
+
+    // TODO missing logic potentially???
+}
+
+void o_ltc6811_wrcfg(unit8_t total_ic, // Number of ICs in the system
+        unit8_t r_config[][6] // A two dimensional array of the configuration data that will be written
+    )
+{
+    /* This command will write the configuration registers in
+        descending order so that the last devices Configuration
+        is written first.
+    */
+    const unit8_t BYTES_IN_REG = 6;
+    const CMD_LEN = 4 + (8*total_ic);
+    unit8_t *cmd;
+    unit16_t cfg_pec;
+    unit8_t cmd_index;  //command counter
+
+    cmd = (unit8_t *)malloc(CMD*sizeof(unit8_t));
+
+    cmd[0] = 0x00;
+    cmd[1] = 0x01;
+    cmd[2] = 0x3d;
+    cmd[3] = 0x6e;
+
+    cmd_index = 4;
+
+    /* Iterate through each IC starting at the last and writing the first config */
+    for (unit8_t current_ic = total_ic; current_ic > 0; current_ic--) {
+        // Iterate through each of the 6 bytes in the CFGR register
+        for (unit8_t current_byte = 0; current_byte < BYTES_IN_REG; current_byte++) {
+            cmd[cmd_index] = config[current_ic-1][current_byte];
+            cmd_index = cmd_index + 1;
+        }
+        cfg_pec = (unit16_t)pec15_calc(BYTES_IN_REG, &config[current_ic-1][0]); // Calculate the PEC for each IC's configuration register data
+        cmd[cmd_index] = (unit8_t)(cfg_pec >> 8);
+        cmd[cmd_index + 1] = (unit8_t)(cfg_pec);
+        cmd_index = cmd_index + 2;
+    }
+
+    wakeup_idle(total_ic);  // Guarentee that the ltc6811 isoSPI port is awake
+
+    PORTB &= ~_BV(PB4);      // Set CS low
+    spi_write_array(cmd, CMD_LEN);
+    PORTB |= _BV(PB4);      // Set CS high
+    free(cmd);
+}
+
+void enable_discharge(unit8_t ic, unit8_t cell) {
+    /* This function sets a discharge bit in the configuration register. Cell and IC are 1-indexed */
+    if (cell < 9) {
+        tx_cfg[ic - 1][4] = (1 << (cell - 1));
+    } else if (cell < 13) {
+        tx_cfg[ic - 1][5] = (1 << (cell - 9));
+    }
+    discharge_status[ic - 1] |= (1 << (cell - 1));
+}
+
+void disable_discharge(unit8_t ic, unit8_t cell) {
+    if (cell < 9) {
+        tx_cfg[ic - 1][4] &= ~(1 << (cell - 1));
+    } else if (cell < 13) {
+        tx_cfg[ic - 1][5] &= ~(1 << (cell - 9));
+    }
+    discharge_status[ic - 1] &= ~(1 << (cell - 1));
+}
+
+unit32_t o_ltc6811_pollAdc(void) {
+    /* This function will block operation until the ADC has finished its conversion */
+    unit32_t counter = 0;
+    unit8_t finished = 0;
+    unit8_t current_time = 0;
+    unit8_t cmd[4];
+    unit16_t cmd_pec;
+
+    cmd[0] = 0x07;
+    cmd[1] = 0x14;
+    cmd_pec = pec15_calc(2, cmd);
+    cmd[2] = (unit8_t)(cmd_pec >> 8);
+    cmd[3] = (unit8_t)(cmd_pec);
+
+    PORTB &= ~_BV(PB4);     // Set CS low
+    spi_write_array(cmd, 4);
+
+    // Delay timer
+    while((counter < 200000) && (finished == 0)) {
+        current_time = spi_message(0xFF);
+        if (current_time > 0) {
+            finished = 1;
+        } else {
+            counter = counter + 10;
+        }
+    }
+
+    PORTB |= _BV(PB4);      // Set CS high
+
+    return counter;
+}
+
+void o_ltc6811_adcv(unit8_t MD, //ADC Mode
+        unit8_t DCP, //Discharge Permit
+        unit8_t CH //Cell channels to be measured
+    )
+{
+    /* This function starts cell voltage conversion */
+    unit8_t cmd[4];
+    unit16_t cmd_pec;
+    unit8_t md_bits;
+
+    md_bits = (MD & 0x02) >> 1;
+    cmd[0] = md_bits + 0x02;
+    md_bits = (MD & 0x01) << 7;
+    cmd[1] = md_bits + 0x60 + (DCP << 4) + CH;
+    cmd_pec = pec15_calc(2, cmd);
+    cmd[2] = (unit8_t)(cmd_pec >> 8);
+    cmd[3] = (unit8_t)(cmd_pec);
+
+    PORTB &= ~_BV(PB4);     // Set CS low
+    spi_write_array(cmd, 4);
+    PORTB |= _BV(PB4);      // Set CS high    
+}
+
+
+/*----- Multiplexer Helper Functions -----*/
+void set_mux_channel(unit8_t total_ic, unit8_t i2c_address, unit8_t channel) {
+    unit8_t command = 0x00 | channel;
+    write_i2c(total_ic, i2c_address, command, 0, 0); // (total_ic, address, command, data, data_length)
+}
+
+void mux_disable(unit8_t total_ic, unit8_t i2c_address) {
+    unit8_t command = 0x00;
+    write_i2c(total_ic, i2c_address, command, 0, 0); // (total_ic, address, command, data, data_length)
+}
 
 
 /*----- MAIN -----*/
