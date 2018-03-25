@@ -115,7 +115,7 @@ unit8_t clock_prescale = 0x00;  // Used for timer
 // CAN
 ISR(CAN_INT_vect) {
     // TSMS
-    CANPAGE = (0 << MOBNBO); //TODO correct page
+    CANPAGE = (0 << MOBNB0); //TODO correct page
     if(bit_is_set(CANSTMOB, RXOK)) {
         volatile unit8_t msg = CANSMG;          //TODO figure out order of msg
         gTSMS = msg;
