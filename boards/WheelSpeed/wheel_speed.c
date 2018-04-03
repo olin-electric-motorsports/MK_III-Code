@@ -76,18 +76,32 @@ void updateStateFromFlags(void) {
     */
 }
 
-float Mean(float x[])
+float mean(float x[])
 {
-  float sum=0;
+  float sum=0; /*Pretty simple, adds the elements of x*/
   for(i=0; i < x.length; i ++){
     sum += x[i];
   }
-  return sum/x.length
+  return sum/x.length /*Then returns the mean*/
 }
 
-float autocor(float x[])
+float autocorrelation(float x[])
 {
-  /*also hm*/
+  float mean = mean(x); /*First just get the average*/
+
+  float autocorrelation[x.length/2] /*Its only going to be half the length of x,
+  at least according the website I got this code from.*/
+  for (t = 0; t < autocorrelation.length; t ++){ //t is a lag
+    float n = 0; //initializes the numerator
+    float d = 0; // initializes the denominator
+    for (i = 0; i < x.length-t; i ++){ //Loops to length-t, to avoid the lag going past the end of the signal
+      float xim = x[i] - mean; //Error from the mean for each point
+      n += xim * (x[(i+t)%x.length]-mean); //by summing, gets the covariance of the signal with itself at lag t
+      d += xim * xim //covariance of the signal with itself, effectively just the variance
+    }
+    autocorrelation[t] = n / d; //after summing, finds the autocorrelation at lag t
+  }
+  return autocorrelation
 }
 
 //TODO any other functionality goes here
