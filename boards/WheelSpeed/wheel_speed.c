@@ -76,7 +76,23 @@ void updateStateFromFlags(void) {
     */
 }
 
+float Mean(float x[])
+{
+  float sum=0;
+  for(i=0; i < x.length; i ++){
+    sum += x[i];
+  }
+  return sum/x.length
+}
+
+float autocor(float x[])
+{
+  /*also hm*/
+}
+
 //TODO any other functionality goes here
+
+
 
 
 /*----- MAIN -----*/
