@@ -16,7 +16,7 @@ uint16_t pec15_calc(uint8_t len, //Number of bytes that will be used to calculat
     )
 {
     /* This function calculates and returns CRC15 */
-    uint16_t remainder,addr;
+    uint16_t remainder, addr;
 
     remainder = 16;//initialize the PEC
     for (uint8_t i = 0; i<len; i++) // loops for each byte in data array
