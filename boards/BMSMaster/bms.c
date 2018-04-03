@@ -111,8 +111,8 @@ ISR(PCINT0_vect) { //TODO change!
 }
 
 ISR(TIMER0_COMPA_vect) {
-    // Only send CAN msgs every 20 cycles
-    if( clock_prescale >= 20 ) {
+    // Only send CAN msgs every 50 cycles
+    if( clock_prescale >= 50 ) {
         gFlag |= READ_VALS_FLAG;
         timer_counter = 0;
     }
