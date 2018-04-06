@@ -141,6 +141,7 @@ ISR(PCINT0_vect) {
         gFlag &= ~_BV(STATUS_LEFT_E_STOP);
     }
     if(PORT_TSMS, SD_TSMS) {
+        if()
         gFlag |= _BV(STATUS_TSMS);
     } else {
         gFlag &= ~_BV(STATUS_TSMS);
@@ -194,73 +195,51 @@ void initTimer_8bit(void) {
     OCR0A = 0xFF;
 }
 
-static inline void read_pins(void) {
+static inline void updateStateFromFlags(void) {
 
     /* Build CAN Message */
-    if(bit_is_clear(gFlag, STATUS_MAIN_FUSE)) {
+    if(bit_is_set(gFlag, STATUS_MAIN_FUSE)) {
         gCAN_MSG[CAN_MAIN_FUSE] = 0xFF;     // Electrical signal is low (meaning fuse is set)
     } else {
         gCAN_MSG[CAN_MAIN_FUSE] = 0x00;
     }
 
-    if(bit_is_clear(gFlag, STATUS_LEFT_E_STOP)) {
+    if(bit_is_set(gFlag, STATUS_LEFT_E_STOP)) {
         gCAN_MSG[CAN_LEFT_E_STOP] = 0xFF;
     } else {
         gCAN_MSG[CAN_LEFT_E_STOP] = 0x00;
     }
 
-    if(bit_is_clear(gFlag, STATUS_RIGHT_E_STOP)) {
+    if(bit_is_set(gFlag, STATUS_RIGHT_E_STOP)) {
         gCAN_MSG[CAN_RIGHT_E_STOP] = 0xFF;
     } else {
         gCAN_MSG[CAN_RIGHT_E_STOP] = 0x00;
     }
 
-    if(bit_is_clear(gFlag, STATUS_BSPD)) {
+    if(bit_is_set(gFlag, STATUS_BSPD)) {
         gCAN_MSG[CAN_BSPD] = 0xFF;
     } else {
         gCAN_MSG[CAN_BSPD] = 0x00;
     }
 
-    if(bit_is_clear(gFlag, STATUS_HVD)) {
+    if(bit_is_set(gFlag, STATUS_HVD)) {
         gCAN_MSG[CAN_HVD] = 0xFF;
     } else {
         gCAN_MSG[CAN_HVD] = 0x00;
     }
 
-    if(bit_is_clear(gFlag, STATUS_TSMS)) {
+    if(bit_is_set(gFlag, STATUS_TSMS)) {
         gCAN_MSG[CAN_TSMS] = 0xFF;
     } else {
         gCAN_MSG[CAN_TSMS] = 0x00;
     }
 
-    if(bit_is_clear(gFlag, STATUS_BRAKE)) {
+    if(bit_is_set(gFlag, STATUS_BRAKE)) {
         gCAN_MSG[CAN_BRAKE] = 0xFF;
     } else {
         gCAN_MSG[CAN_BRAKE] = 0x00;
     }
 }
-
-void checkShutdownState(void)   {
-    /*
-    -Check if bits are set
-        -IF they are, set CAN list position to 0xFF
-        -ELSE do set CAN list position to 0x00
-    */
-}
-
-void updateStateFromFlags(void) {
-    /*
-    Based off the state of the flag(s), update components and send CAN
-    */
-}
-
-//TODO any other functionality goes here
-/*
-    MISSING MODULE
-    TODO
-    Update LED status bar
-*/
-
 
 /*----- MAIN -----*/
 int main(void){
@@ -286,7 +265,7 @@ int main(void){
         if(bit_is_set(gFlag, UPDATE_STATUS)) {
             PORT_EXT_LED_ORANGE ^= _BV(EXT_LED_ORANGE);     // Blink Orange LED for timing check
 
-            read_pins();                // Update all pin values
+            updateStateFromFlags();     // Build CAN message based off flags
 
             CAN_transmit(BROADCAST_MOb, CAN_ID_BRAKE_LIGHT,
                 CAN_LEN_BRAKE_LIGHT, gCAN_MSG);
