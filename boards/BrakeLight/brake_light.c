@@ -30,10 +30,10 @@ Author:
 #define GLOBAL_SHUTDOWN         0x0
 
 /* Brake */
-#define BRAKE_PIN               PC7 //TODO Analog Brake INPUT
-#define BRAKE_PORT              PORTC //TODO
-#define BRAKE_LIGHT_PIN         PD2 //TODO Analog Brake Light OUTPUT
-#define BRAKE_LIGHT_PORT        PORTD //TODO
+#define BRAKE_PIN           PB5
+#define PORT_BRAKE          PORTB
+#define ANALOG_BRAKE_PIN    PB7
+#define ANALOG_BRAKE_PORT   PORTB
 
 /* BSPD Status Output */
 #define BSPD_STATUS_PIN         PC3 //TODO
@@ -53,10 +53,6 @@ Author:
 #define PORT_BSPD           PORTD
 #define PORT_HVD            PORTD
 #define PORT_TSMS           PORTB
-
-// Brake
-#define BRAKE_PIN           PB5;
-#define PORT_BRAKE          PORTB;
 
 /* CAN Positions */
 #define CAN_BRAKE           0
@@ -108,6 +104,12 @@ volatile unit8_t gTSMS_OLD = 0x00;  // Used for comparison
 
 unit8_t clock_prescale = 0x00;  // Used for timer
 
+// Brake POS mapping Values
+uint8_t throttle_HIGH = 0xE7;       //TODO change with actual values
+uint8_t throttle_LOW = 0xD3;        //TODO change with actual values
+
+
+
 /*----- Interrupt(s) -----*/
 // CAN
 ISR(CAN_INT_vect) {
@@ -128,7 +130,7 @@ ISR(PCINT0_vect) {
     /*
     Standard Pin Change Interupt
     covers interupts 0-2
-    Interupts covered: Main Shutdown Fuse, Left E-Stop, TSMS, & Brake Light
+    Interupts covered: Main Shutdown Fuse, Left E-Stop, TSMS, & Brake
     */
     if(PORT_MAIN_FUSE, SD_MAIN_FUSE) {
         gFlag |= _BV(STATUS_MAIN_FUSE);
@@ -217,7 +219,14 @@ static inline void updateStateFromFlags(void) {
     }
 
     if(bit_is_set(gFlag, STATUS_BSPD)) {
-        gCAN_MSG[CAN_BSPD] = 0xFF;
+        // Check if fault
+        if(bit_is_clear(BSPD_STATUS_PORT, BSPD_STATUS_PIN)) {       //TODO are these different?
+            gCAN_MSG[0] = 0xFF;
+            // Send Global Panic
+            CAN_transmit(BROADCAST_MOb, CAN_ID_PANIC,
+                CAN_LEN_PANIC, gCAN_MSG);
+            gCAN_MSG[CAN_BSPD] = 0xFF;
+        }
     } else {
         gCAN_MSG[CAN_BSPD] = 0x00;
     }
@@ -239,7 +248,17 @@ static inline void updateStateFromFlags(void) {
     } else {
         gCAN_MSG[CAN_BRAKE] = 0x00;
     }
+
 }
+
+static inline void mapBrakePos() {
+    /* This function polls the brake position and maps it to
+        a byte for sending over CAN. In range [0x00, 0xFF] */
+    uint8_t raw = ANALOG_BRAKE_PORT & ANALOG_BRAKE_PIN;
+    uint8_t mapped = ((raw - throttle_LOW) * 0xFF) / (throttle_HIGH - throttle_LOW);
+    gCAN_MSG[CAN_BREAK_POS] = mapped;
+}
+
 
 /*----- MAIN -----*/
 int main(void){
@@ -266,6 +285,7 @@ int main(void){
             PORT_EXT_LED_ORANGE ^= _BV(EXT_LED_ORANGE);     // Blink Orange LED for timing check
 
             updateStateFromFlags();     // Build CAN message based off flags
+            mapBrakePos();              // Add brake position to CAN message
 
             CAN_transmit(BROADCAST_MOb, CAN_ID_BRAKE_LIGHT,
                 CAN_LEN_BRAKE_LIGHT, gCAN_MSG);
