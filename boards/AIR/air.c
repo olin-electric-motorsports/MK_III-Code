@@ -82,8 +82,8 @@ ISR(CAN_INT_vect) {
 ISR(TIMER0-COMPA-vect) {
     /* Timer used to do processes only every 10 cycles */
     if ( clock_prescale > 10 ) {
-	gFlag |= _BV(UPDATE_STATUS);
-	clock_prescale = 0;
+    	gFlag |= _BV(UPDATE_STATUS);
+    	clock_prescale = 0;
     }
     clock_prescale++;
 
