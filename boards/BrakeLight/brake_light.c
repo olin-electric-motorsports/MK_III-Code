@@ -1,22 +1,11 @@
-/**********************************************************
-This is the base document for getting started with writing
-firmware for OEM.
-TODO delete before submittin
-**********************************************************/
-
 /*
 Header:
-    Explain what this project does as overview
+    This board manages the brake light, 6 sense modules, and the brake
+    position. It sends sense statuses over CAN as well as the brake position
+    every certain amount of time.
 Author:
-    @author
+    @author Peter Seger & Vienna Scheyer
 */
-
-
-/* TODO */
-/*
-    - Add sensing display integration
-    - Add brake position sending
-/*
 
 /*----- Includes -----*/
 #include <stdio.h>
@@ -26,14 +15,11 @@ Author:
 #include <avr/interrupt.h>
 
 /*----- Macro Definitions -----*/
-/* Shutdown */
-#define GLOBAL_SHUTDOWN         0x0
-
 /* Brake */
-#define BRAKE_PIN               PC7 //TODO Analog Brake INPUT
-#define BRAKE_PORT              PORTC //TODO
-#define BRAKE_LIGHT_PIN         PD2 //TODO Analog Brake Light OUTPUT
-#define BRAKE_LIGHT_PORT        PORTD //TODO
+#define BRAKE_PIN           PB5
+#define PORT_BRAKE          PORTB
+#define ANALOG_BRAKE_PIN    PB7
+#define ANALOG_BRAKE_PORT   PORTB
 
 /* BSPD Status Output */
 #define BSPD_STATUS_PIN         PC3 //TODO
@@ -43,9 +29,9 @@ Author:
 #define SD_MAIN_FUSE		PB0
 #define SD_LEFT_E_STOP		PB1
 #define SD_RIGHT_E_STOP		PD5
-#define SD_BSPD     		PD6 //TODO CHECK?
-#define SD_HVD      		PD7 //TODO CHECK?
-#define SD_TSMS     		PB2 //TODO CHECK?
+#define SD_BSPD     		PD6
+#define SD_HVD      		PD7
+#define SD_TSMS     		PB2
 
 #define PORT_MAIN_FUSE      PORTB
 #define PORT_LEFT_E_STOP    PORTB
@@ -65,94 +51,131 @@ Author:
 #define CAN_MAIN_FUSE       7
 
 #define BROADCAST_MOb       0
-#define //TODO readboards
+
+
 
 /* Sense LEDs */
 // Might be irrelevant because the gStatusBar
-#define EXT_LED1            PD0 //TODO (Debug LED on RJ45)
-#define EXT_LED2            PC0 //TODO (Debug LED on RJ45)
-#define LED1                PB6 //TODO (Purpose - on LED bar)
-#define LED2                PB6 //TODO (Purpose - on LED bar)
-#define LED3                PB6 //TODO (Purpose - on LED bar)
-#define LED4                PB6 //TODO (Purpose - on LED bar)
-#define LED5                PB6 //TODO (Purpose - on LED bar)
-#define LED6                PB6 //TODO (Purpose - on LED bar)
+#define EXT_LED_GREEN           PD0 //(Debug LED on RJ45)
+#define EXT_LED_ORANGE          PC0 //(Debug LED on RJ45)
+#define LED1                    PC5 //(Purpose - on LED bar)
+#define LED2                    PC4 //(Purpose - on LED bar)
 
-#define PORT_EXT_LED1       PORTD //TODO (Debug LED on RJ45)
-#define PORT__EXT_LED2      PORTC //TODO (Debug LED on RJ45)
-#define PORT_LED1           PB6 //TODO (Purpose - on LED bar)
-#define PORT_LED2           PB6 //TODO (Purpose - on LED bar)
-#define PORT_LED3           PB6 //TODO (Purpose - on LED bar)
-#define PORT_LED4           PB6 //TODO (Purpose - on LED bar)
-#define PORT_LED5           PB6 //TODO (Purpose - on LED bar)
-#define PORT_LED4           PB6 //TODO (Purpose - on LED bar)
+#define PORT_EXT_LED_GREEN      PORTD //(Debug LED on RJ45)
+#define PORT_EXT_LED_ORANGE     PORTC //(Debug LED on RJ45)
+#define PORT_LED1               PORTC //(Purpose - on LED bar)
+#define PORT_LED2               PORTC //(Purpose - on LED bar)
 
-#define STATUS_MAIN_FUSE    0
-#define STATUS_LEFT_E_STOP  1
-#define STATUS_RIGHT_E_STOP 2
-#define STATUS_BSPD         3
-#define STATUS_HVD          4
-#define STATUS_TSMS         5
+
+//gFlag Positions
+#define STATUS_MAIN_FUSE    1
+#define STATUS_LEFT_E_STOP  2
+#define STATUS_RIGHT_E_STOP 3
+#define STATUS_BSPD         4
+#define STATUS_HVD          5
+#define STATUS_TSMS         6
+#define STATUS_BRAKE        7
+
+//gTimerFlag Positions
+#define UPDATE_STATUS   0       // Determines when to send messages
+#define SEND_BRAKE      1       // Determines when to send brake positions
 
 
 
 /*----- Global Variables -----*/
-volatile uint8_t gFlag = 0x01;  // Global Flag
+volatile uint8_t gFlag = 0x01;          // Global Flag
+volatile uint8_t gTimerFlag = 0x01;     // Timer flag
 unit8_t gCANMessage[8] = {0, 0, 0, 0, 0, 0, 0, 0};  // CAN Message
 unit8_t gPRECHARGE_TIMER = 0x00;
-unit8_t gStatusBar[6] = {0, 0, 0, 0, 0, 0};         // LED status bar
 
 volatile unit8_t gTSMS = 0x00;
 volatile unit8_t gTSMS_OLD = 0x00;  // Used for comparison
 
-#define UPDATE_STATUS   0
-#define SEND_MSG        0       // Used for timer to send CAN msgs
-#define TSMS_STATUS     1       // Used to track changes in TSMS
+// Timer counters
+unit8_t clock_prescale = 0x00;  // Used for update timer
+unit8_t brake_timer = 0x00;     // Used for brake timer
 
-unit8_t clock_prescale = 0x00;  // Used for timer
+// Brake POS mapping Values
+uint8_t brake_HIGH = 0xE7;       //TODO change with actual values
+uint8_t brake_LOW = 0xD3;        //TODO change with actual values
+
+
 
 /*----- Interrupt(s) -----*/
+// 8-bit Timer
+ISR(TIMER0_COMPA_vect) {
+    // Only send CAN msgs every 20 cycles
+    if(clock_prescale > 20) {
+        gTimerFlag |= _BV(UPDATE_STATUS);
+        clock_prescale = 0;
+    }
+    clock_prescale++;
+
+    // Only send a brake message every 40 cycles
+    if(brake_timer > 40) {
+        gTimerFlag |= _BV(SEND_BRAKE);
+        brake_timer = 0;
+    }
+    brake_timer++;
+}
+
 // CAN
 ISR(CAN_INT_vect) {
-    // TSMS
-    CANPAGE = (0 << MOBNB0); //TODO correct page
-    if(bit_is_set(CANSTMOB, RXOK)) {
-        volatile unit8_t msg = CANSMG;          //TODO figure out order of msg
-        gTSMS = msg;
-        if(msg == 0x00) {
-            gFlags &= ~_BV(TSMS_STATUS)         // Clear bit
-        } else {
-            gFlags |= _BV(TSMS_STATUS)          // Set bit
-        }
-    }
+    /*
+    Currently not reading CAN messages
+    */
 }
 
 ISR(PCINT0_vect) {
     /*
     Standard Pin Change Interupt
-    covers interupts 0-2
-    Interupts covered: Main Shutdown Fuse, Left E-Stop, & TSMS
+    covers interupts 0-3
+    Interupts covered: Main Shutdown Fuse, Left E-Stop, TSMS, & Brake
     */
-    // TODO do we need?
+    if(PORT_MAIN_FUSE, SD_MAIN_FUSE) {
+        gFlag |= _BV(STATUS_MAIN_FUSE);
+    } else {
+        gFlag &= ~_BV(STATUS_MAIN_FUSE);
+    }
+    if(PORT_LEFT_E_STOP, SD_LEFT_E_STOP) {
+        gFlag |= _BV(STATUS_LEFT_E_STOP);
+    } else {
+        gFlag &= ~_BV(STATUS_LEFT_E_STOP);
+    }
+    if(PORT_TSMS, SD_TSMS) {
+        gTSMS = PORT_TSMS & SD_TSMS;
+        gFlag |= _BV(STATUS_TSMS);
+    } else {
+        gFlag &= ~_BV(STATUS_TSMS);
+    }
+    if(PORT_BRAKE, PIN_BRAKE) {
+        gFlag |= _BV(STATUS_BRAKE);
+    } else {
+        gFlag &= ~_BV(STATUS_BRAKE);
+    }
 }
 
 ISR(PCINT2_vect) {
     /*
     Standard Pin Change Interupt
     covers interupts 21-23
-    Interupts covered: Rright E-Stop, BSPD, HVD
+    Interupts covered: Right E-Stop, BSPD, HVD
     */
-    // TODO do we need?
-}
-
-// 8-bit Timer
-ISR(TIMER0_COMPA_vect) {
-    // Only send CAN msgs every 20 cycles
-    if( clock_prescale > 20 ) {
-        gFlag |= _BV(SEND_MSG);
-        clock_prescale = 0;
+    if(PORT_RIGHT_E_STOP, SD_RIGHT_E_STOP) {
+        gFlag |= _BV(STATUS_RIGHT_E_STOP);
+    } else {
+        gFlag &= ~_BV(STATUS_RIGHT_E_STOP);
     }
-    clock_prescale++;
+    if(PORT_BSPD, PORT_BSPD) {
+        gFlag |= _BV(STATUS_BSPD);
+    } else {
+        gFlag &= -_BV(STATUS_BSPD);
+    }
+    if(PORT_HVD, PORT_HVD) {
+        gFlag |= _BV(STATUS_HVD);
+    } else {
+        gFlag &= -_BV(STATUS_HVD);
+    }
 }
 
 
@@ -164,104 +187,104 @@ void initTimer_8bit(void) {
     OCR0A = 0xFF;
 }
 
-static inline void read_pins(void) {
+static inline void updateStateFromFlags(void) {
 
     /* Build CAN Message */
-    if(bit_is_clear(PORT_MAIN_FUSE, SD_MAIN_FUSE)) {
+    if(bit_is_set(gFlag, STATUS_MAIN_FUSE)) {
         gCAN_MSG[CAN_MAIN_FUSE] = 0xFF;     // Electrical signal is low (meaning fuse is set)
     } else {
         gCAN_MSG[CAN_MAIN_FUSE] = 0x00;
     }
 
-    if(bit_is_clear(PORT_LEFT_E_STOP, SD_LEFT_E_STOP)) {
+    if(bit_is_set(gFlag, STATUS_LEFT_E_STOP)) {
         gCAN_MSG[CAN_LEFT_E_STOP] = 0xFF;
     } else {
         gCAN_MSG[CAN_LEFT_E_STOP] = 0x00;
     }
 
-    if(bit_is_clear(PORT_RIGHT_E_STOP, SD_RIGHT_E_STOP)) {
+    if(bit_is_set(gFlag, STATUS_RIGHT_E_STOP)) {
         gCAN_MSG[CAN_RIGHT_E_STOP] = 0xFF;
     } else {
         gCAN_MSG[CAN_RIGHT_E_STOP] = 0x00;
     }
 
-    if(bit_is_clear(PORT_BSPD, SD_BSPD)) {
-        gCAN_MSG[CAN_BSPD] = 0xFF;
+    if(bit_is_set(gFlag, STATUS_BSPD)) {
+        // Check if fault
+        if(bit_is_clear(BSPD_STATUS_PORT, BSPD_STATUS_PIN)) {       //TODO are these different?
+            gCAN_MSG[0] = 0xFF;
+            // Send Global Panic
+            CAN_transmit(BROADCAST_MOb, CAN_ID_PANIC,
+                CAN_LEN_PANIC, gCAN_MSG);
+            gCAN_MSG[CAN_BSPD] = 0xFF;
+        }
     } else {
         gCAN_MSG[CAN_BSPD] = 0x00;
     }
 
-    if(bit_is_clear(PORT_HVD, SD_HVD)) {
+    if(bit_is_set(gFlag, STATUS_HVD)) {
         gCAN_MSG[CAN_HVD] = 0xFF;
     } else {
         gCAN_MSG[CAN_HVD] = 0x00;
     }
 
-    if(bit_is_clear(PORT_TSMS, SD_TSMS)) {
-        gCAN_MSG[CAN_TSMS] = 0xFF;
-    } else {
-        gCAN_MSG[CAN_TSMS] = 0x00;
+    if(bit_is_set(gFlag, STATUS_TSMS)) {
+        if(gTSMS != gTSMS_OLD) {
+            gCAN_MSG[CAN_TSMS] = gTSMS;
+            gTSMS_OLD = gTSMS;
+        }
     }
 
-    if(bit_is_clear(BRAKE_PORT, BRAKE_PIN)) {
+    if(bit_is_set(gFlag, STATUS_BRAKE)) {
         gCAN_MSG[CAN_BRAKE] = 0xFF;
     } else {
         gCAN_MSG[CAN_BRAKE] = 0x00;
     }
+
 }
 
-void checkShutdownState(void)   {
-    /*
-    -Check if bits are set
-        -IF they are, set CAN list position to 0xFF
-        -ELSE do set CAN list position to 0x00
-    */
+static inline void mapBrakePos() {
+    /* This function polls the brake position and maps it to
+        a byte for sending over CAN. In range [0x00, 0xFF] */
+    uint8_t raw = ANALOG_BRAKE_PORT & ANALOG_BRAKE_PIN;
+    uint8_t mapped = ((raw - brake_LOW) * 0xFF) / (brake_HIGH - brake_LOW);
+    gCAN_MSG[CAN_BREAK_POS] = mapped;
 }
-
-void updateStateFromFlags(void) {
-    /*
-    Based off the state of the flag(s), update components and send CAN
-    */
-}
-
-//TODO any other functionality goes here
-/*
-    MISSING MODULE
-    TODO
-    Update LED status bar
-*/
 
 
 /*----- MAIN -----*/
 int main(void){
     /*
-    -Set up I/O
-    -Set up CAN timer (done)
-    -Initialize external libraries (if applicable)
-    -Wait on CAN
-    -Infinite loop checking shutdown state!
+    -Set up Interrupts
+    -Set up CAN timer
+    -While
+        -Every 20 timer cycles, send flag status
+        -Every 40 timer cycles, send brake position
     */
     sei();                              // Enable interrupts
 
     /* Setup interrupt registers */
     PCICR |= _BV(PCIE0) | _BV(PCI2);
-    PCMSK0 |= _BV(PCINT0) | _BV(PCINT1) | _BV(PCINT2);
-    PCMSK2 |= _BV(PCINT21) | _BV(PCINT22) | _BV(PCINT23);
+    PCMSK0 |= _BV(PCINT0) | _BV(PCINT1) | _BV(PCINT2) | _BV(PCINT5);      // Covers Pins: Main Fuse, Left E-Stop, TSMS, & Brake Light
+    PCMSK2 |= _BV(PCINT21) | _BV(PCINT22) | _BV(PCINT23);   // Covers Pins: Right E-Stop, BSPD, and HVD
 
-    initTimer_8bit();                   // Begin 8-bit timer
-
-    gFlag |= _BV(UPDATE_STATUS);        // Read ports
+    initTimer_8bit();                       // Begin 8-bit timer
+    gTimerFlag |= _BV(UPDATE_STATUS);        // Read ports
 
     while(1) {
-        if(bit_is_set(gFlag, UPDATE_STATUS)) {
-            PORT_EXT_LED1 ^= _BV(EXT_LED1);     // Blink LED1 for timing check
+        if(bit_is_set(gTimerFlag, UPDATE_STATUS)) {
+            PORT_EXT_LED_ORANGE ^= _BV(EXT_LED_ORANGE);     // Blink Orange LED for timing check
 
-            read_pins();                // Update all pin values
+            updateStateFromFlags();     // Build CAN message based off flags
+            gTimerFlag &= ~_BV(UPDATE_STATUS);
 
+            if(bit_is_set(gTimerFlag, SEND_BRAKE)) {
+                mapBrakePos();              // Add brake position to CAN message
+                gTimerFlag &= ~_BV(SEND_BRAKE);
+            }
+
+            // Send CAN message
             CAN_transmit(BROADCAST_MOb, CAN_ID_BRAKE_LIGHT,
                 CAN_LEN_BRAKE_LIGHT, gCAN_MSG);
-
-            gFlag &= ~_BV(UPDATE_STATUS);
         }
     }
 }
