@@ -28,6 +28,11 @@ unit8_t gCANMessage[8] = {0, 0, 0, 0, 0, 0, 0, 0};  // CAN Message
 
 unit8_t RandomVar = 0x00;
 
+// Timer counters
+unit8_t clock_prescale = 0x00;  // Used for update timer ?? Does this matter? It was from BrakeLight but I don't know what it would do
+unit8_t sensor_timer = 0x00;     // Tells the sensor when to read?
+unit8_t autocor_timer = 0x00;     // Tells how often to calculate autocorrelation (and restart building the array of sensor values)
+
 /*----- Interrupt(s) -----*/
 // *pg 76 of datasheet*
 ISR(CAN_INT_vect) {
@@ -100,6 +105,10 @@ float autocorrelation(float x[]){
         autocorrelation[t] = n / d; //after summing, finds the autocorrelation at lag t
     }
     return autocorrelation
+}
+
+float calculate_speed(float autocor[]){
+    /*hm...*/
 }
 
 //TODO any other functionality goes here
