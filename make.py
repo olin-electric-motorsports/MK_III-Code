@@ -29,7 +29,7 @@ COMPILER = 'gnu99'
 FUSE = '0x62'
 
 CFLAGS = '-Os -g -mmcu=' + MCU + ' -std=' + COMPILER + ' -Wall -Werror -ff'
-LDFLAG = '-mmcu=' + MCU + ' -lm -std=' + COMPILER
+LDFLAG = '-mmcu=' + MCU + ' -lm -std=' +at COMPILER
 AVRFLAGS = '-p -B2 ' + MCU + ' -v -c ' + PROGRAMMER + ' -p ' + PART
 
 possible_boards = []

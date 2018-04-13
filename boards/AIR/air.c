@@ -72,6 +72,68 @@ Author:
 #define BMS_READ_Mob	1
 
 
+
+
+
+/*----- MAIN -----*/
+int main(void)
+{
+  DDRB |= _BV(LED1) | _BV(LED2); //Makes PORT_B as output
+  // DDRB &= ~(_BV(PIN_SenseConnToHVD)) //SET SenseConnToHVD as input
+  // DDRC |= _BV(PRECHARGE); //SET Precharge as output
+  // DDRC &= ~(_BV(AIR_Weld_Detect));
+  DDRD &= ~(_BV(PIN_SenseIMD)) & ~(_BV(PIN_SenseBMS)) & ~(_BV(PIN_SenseMainTSConn)); //
+  // uint8_t old_SenseBMS = PIND & _BV(PIN_SenseBMS);
+  uint8_t current_SenseBMS;
+  // uint8_t old_SenseIMD = PIND & _BV(PIN_SenseIMD);
+  uint8_t current_SenseIMD;
+  while(1)
+  {
+    //update BMS status
+    current_SenseBMS = (PIND & _BV(PIN_SenseBMS));
+  //   if(current_SenseBMS != (old_SenseBMS)){
+  //     //do something
+  //     for(int i=0; i < 10; i++){
+  //     PORT_LED2 ^= _BV(LED2);
+  //     _delay_ms(100);
+  //   }
+  //
+  // }
+
+    //update IMD status
+    current_SenseIMD = (PIND & _BV(PIN_SenseIMD));
+  //   if(current_SenseIMD != (old_SenseIMD)){
+  //     //do something
+  //     for(int i=0; i < 10; i++){
+  //     PORT_LED2 ^= _BV(LED2);
+  //     _delay_ms(100);
+  //   }
+  //
+  // }
+
+    // get output from BMS and IMD
+    if (current_SenseBMS != (current_SenseIMD>>1)){
+      for(int i=0; i < 10; i++){
+      PORT_LED2 ^= _BV(LED2);
+      _delay_ms(100);
+    }
+  }
+
+    // old_SenseBMS = current_SenseBMS;
+
+    if (PIND & _BV(PIN_SenseBMS)){
+      PORT_LED1 ^= _BV(LED1);
+      _delay_ms(100);
+      // PORT_LED1 &= ~(1<<LED1);
+      // _delay_ms(1000);
+
+    }
+
+  }
+
+
+}
+
 // /*----- Global Variables -----*/
 // volatile uint8_t gFlag = 0x01;  // Global Flag
 // unit8_t gCANMessage[8] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};  // CAN Message
@@ -174,26 +236,3 @@ Author:
 // 	gCAN_MSG[SD4_CAN] = 0xFF;
 //     }
 // }
-
-
-/*----- MAIN -----*/
-int main(void)
-{
-  DDRB |= _BV(LED1) | _BV(LED2); //Makes PORT_B as output
-  // DDRB &= ~(_BV(PIN_SenseConnToHVD)) //SET SenseConnToHVD as input
-  // DDRC |= _BV(PRECHARGE); //SET Precharge as output
-  // DDRC &= ~(_BV(AIR_Weld_Detect));
-  DDRD &= ~(_BV(PIN_SenseIMD)) & ~(_BV(PIN_SenseBMS)) & ~(_BV(PIN_SenseMainTSConn)); //
-  while(1)
-  {
-    if (PIND & _BV(PIN_SenseBMS)){
-      // PIN_SenseBMS =
-      PORT_LED1 ^= _BV(LED1);
-      _delay_ms(100);
-      // PORT_LED1 &= ~(1<<LED1);
-      // _delay_ms(1000);
-    }
-  }
-
-
-}
