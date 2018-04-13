@@ -18,7 +18,7 @@ import time
 
 
 CC = 'avr-gcc'
-PROGRAMMER = 'avrispmkII'
+PROGRAMMER = 'usbtiny'
 PORT = 'usb'
 AVRDUDE = 'avrdude'
 OBJCOPY = 'avr-objcopy'
