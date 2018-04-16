@@ -1,12 +1,6 @@
-/**********************************************************
-This is the base document for getting started with writing
-firmware for OEM.
-TODO delete before submitting
-**********************************************************/
-
 /*
 Header:
-    Code for the throttle-steering-position board loacted
+    Code for the throttle-steering-position board located
     in the Dashboard-Left Enclosure
 Author:
     @author coreyacl
@@ -18,6 +12,7 @@ Author:
 #include <string.h>
 #include <avr/io.h>
 #include <avr/interrupt.h>
+#include <util/delay.h>
 
 /*----- Macro Definitions -----*/
 /* Shutdown */
@@ -33,9 +28,9 @@ Author:
 #define STEERING_PORT           PORTD
 
 /* Sense Lines */
-#define SD_INERTIA              PB5
-#define SD_ESTOP                PB6
-#define SD_BOTS                 PB7
+#define SD_INERTIA              PB5 //PCINT5
+#define SD_ESTOP                PB6 //PCINT6
+#define SD_BOTS                 PB7 //PCINT7
 #define SD_PORT                 PORTB
 
 /* Ready to Drive */
@@ -61,6 +56,20 @@ Author:
 #define CAN_INTERTIA            3
 #define CAN_DRIVER_E_STOP       4
 
+/* Flags */
+#define FLAG_BRAKE              0
+#define FLAG_AIRS               1
+#define FLAG_MOTOR_ON           2
+#define FLAG_INERTIA            3
+#define FLAG_ESTOP              4
+#define FLAG_BOTS               5
+
+/* MOBs */
+// Mesage OBjects, or mailboxes?
+#define MOB_BRAKELIGHT          0
+#define MOB_AIR_CONTROL         1
+#define MOB_DASHBOARD           2
+
 #define UPDATE_STATUS   0
 
 //TODO
@@ -78,8 +87,8 @@ volatile uint8_t gTimerFlag = 0x01; // Timer Flag
 
 uint8_t gThrottle[2] = {0x00,0x00};
 uint8_t gThrottle_smoothed = 0x00;
-uint8_t gThrottleThreshold = 0x7f;
-uint8_t gSteering = 0x7f;
+uint8_t gThrottleThreshold = 0x7F;
+uint8_t gSteering = 0x7F;
 
 uint8_t gCANMessage[8] = {0, 0, 0, 0, 0, 0, 0, 0};  // CAN Message
 
@@ -90,6 +99,8 @@ uint8_t timer_counter = 0x00;
 
 /*----- Interrupt(s) -----*/
 // *pg 76 of datasheet*
+// https://github.com/olin-electric-motorsports/MK_II-Code/tree/master/lib
+// https://github.com/olin-electric-motorsports/MK_III-Code/tree/master/lib
 ISR(CAN_INT_vect) {
     /*
     CAN Interupt
@@ -99,16 +110,86 @@ ISR(CAN_INT_vect) {
     IMPORTANT, do not perform any 'real' operations in a interupt,
     just set the flag and move on
     */
-    CANPAGE = (0 << MOBNB0);
-    if (bit_is_set(CANSTMOB,RXOK)) {
 
+    // Brakelight
+    CANPAGE = (MOB_BRAKELIGHT << MOBNB0);
+    if (bit_is_set(CANSTMOB,RXOK)) {
+        volatile int8_t msg = CANMSG;
+
+        if(msg == 0xFF){
+            gFlag |= _BV(FLAG_BRAKE);
+        } else {
+            gFlag &= ~_BV(FLAG_BRAKE);
+        }
+
+        CANSTMOB = 0x00;
+        CAN_wait_on_receive(MOB_BRAKELIGHT,
+                            CAN_ID_BRAKE_LIGHT,
+                            CAN_LEN_BRAKE_LIGHT,
+                            CAN_IDM_single);
     }
+
+    // Air control unnesecary??
+    CANPAGE = (MOB_AIR_CONTROL << MOBNB0);
+    if (bit_is_set(CANSTMOB,RXOK)) {
+        volatile int8_t msg = CANMSG;
+
+        if(msg == 0xFF){
+            gFlag |= _BV(FLAG_AIRS);
+        } else {
+            gFlag &= ~_BV(FLAG_AIRS);
+        }
+
+        CANSTMOB = 0x00;
+        CAN_wait_on_receive(MOB_AIR_CONTROL,
+                            CAN_ID_AIR_CONTROL,
+                            CAN_LEN_AIR_CONTROL,
+                            CAN_IDM_single);
+    }
+
+    //Start button
+    CANPAGE = (MOB_DASHBOARD << MOBNB0);
+    if (bit_is_set(CANSTMOB,RXOK)) {
+        volatile int8_t msg = CANMSG;
+
+        if(msg == 0xFF){
+            gFlag |= _BV(FLAG_MOTOR_ON);
+        } else {
+            gFlag &= ~_BV(FLAG_MOTOR_ON);
+        }
+
+        CANSTMOB = 0x00;
+        CAN_wait_on_receive(MOB_DASHBOARD,
+                            CAN_ID_DASHBOARD,
+                            CAN_LEN_DASHBOARD,
+                            CAN_IDM_single);
+    }
+
 }
 
 ISR(PCINT0_vect) {
     /*
     Standard Pin Change Interupt
     */
+    if(bit_is_set(SD_PORT,SD_INERTIA)){
+        gFlag |= _BV(FLAG_INERTIA);
+    } else {
+        gFlag &= ~_BV(FLAG_INERTIA);
+    }
+
+    if(bit_is_set(SD_PORT,SD_ESTOP)){
+        gFlag |= _BV(FLAG_ESTOP);
+    } else {
+        gFlag &= ~_BV(FLAG_ESTOP);
+    }
+
+    if(bit_is_set(SD_PORT,SD_BOTS)){
+        gFlag |= _BV(FLAG_BOTS);
+    } else {
+        gFlag &= ~_BV(FLAG_BOTS);
+    }
+
+
 }
 
 ISR(TIMER0_COMPA_vect) {
@@ -153,6 +234,15 @@ void checkShutdownState(void)   {
         -IF they are, set CAN list position to 0xFF
         -ELSE do set CAN list position to 0x00
     */
+    if(bit_is_set(gFlag,FLAG_AIRS)){
+        GLOBAL_SHUTDOWN = 0xFF;
+    }
+    if(bit_is_set(gFlag,FLAG_INERTIA)) {
+        GLOBAL_SHUTDOWN = 0xFF;
+    }
+    if(bit_is_set(gFlag,FLAG_BOTS)){
+        GLOBAL_SHUTDOWN = 0xFF;
+    }
 }
 
 void updateStateFromFlags(void) {
@@ -161,9 +251,14 @@ void updateStateFromFlags(void) {
     */
 }
 
-//TODO any other functionality goes here
 
 void checkSensors(void) {
+    /* For troubleshooting sensors
+       Use this to test each sensor, they should all
+       have pull up resistors which means a disconnect
+       would result in a 5V reading and therefore the LEDs
+       should turn on if they've been initiated correctly
+    */
 
     /*--- Read values from ADC ---*/
 
@@ -185,7 +280,8 @@ void checkSensors(void) {
     loop_until_bit_is_clear(ADCSRA, ADSC);
     uint8_t steering = (uint8_t) (ADC >> 2);
 
-    /*--- Set LED's on if >50% ---*/
+    /*--- Set LED's on if > 50% ---*/
+    /*--- Pull ups' on all three ---*/
 
     if(throttle1 > gThrottleThreshold){
         LED2_PORT |= _BV(LED2);
@@ -221,9 +317,25 @@ int main(void){
     */
     initTimer();
     initADC();
+    sei();
+
+    // Set interrupt registers
+    PCIR |= _BV(PCIE0);
+    PCMSK0 |= _BV(PCINT5) | _BV(PCINT6) | _BV(PCINT7);
+
+    // Set pins to output
     DDRC |= _BV(LED1);
     DDRB |= _BV(LED2);
     DDRB |= _BV(LED3);
+    DDRC |= _BV(RTD_LD);
+
+    // set pull up res for steering
+    STEERING_PORT |= _BV(STEERING);
+
+    // turn on RTD for .4 seconds
+    RTD_PORT |= _BV(RTD_LD);
+    _delay_ms(400);
+    RTD_PORT &= ~(_BV(RTD_LD));
 
 
     while(1){
