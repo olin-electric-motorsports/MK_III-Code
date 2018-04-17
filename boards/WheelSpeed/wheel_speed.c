@@ -22,11 +22,34 @@ Author:
 #define MACRO_1     1
 #define MACRO_2     2
 
+/*Sensor Pins*/
+#define LEFT1       PB2
+#define LEFT2       PD7
+#define RIGHT1      PB5
+#define RIGHT2      PC6
+
+/*LED's*/
+#define LED1        PB0
+#define LED2        PB1
+#define PROG_LED1   PB3
+#define PROG_LED2   PD6
+
+//Timer Flag positions
+#define READ_HE     0
+#define RUN_AUTOC   1
+
 /*----- Global Variables -----*/
 volatile uint8_t gFlag = 0x00;  // Global Flag
+volatile uint8_t gTimerFlag = 0x01;     // Timer flag
 unit8_t gCANMessage[8] = {0, 0, 0, 0, 0, 0, 0, 0};  // CAN Message
 
+unsigned Left_1_Data[]
+unsigned Left_2_Data[]
+unsigned Right_1_Data[]
+unsigned Right_2_Data[]
+
 unit8_t RandomVar = 0x00;
+
 
 // Timer counters
 unit8_t clock_prescale = 0x00;  // Used for update timer ?? Does this matter? It was from BrakeLight but I don't know what it would do
@@ -56,6 +79,18 @@ ISR(TIMER0_COMPA_vect) {
     /*
     Timer/Counter0 compare match A
     */
+    //Number of cycles are total guesses and are very wrong
+    if(sensor_timer > 40){
+        gTimerFlag |= _BV(READ_HE);
+        sensor_timer = 0;
+    }
+
+    sensor_timer ++
+    if(autocor_timer > 500){
+        gTimerFlag |= _BV(RUN_AUTOC);
+        autocor_timer = 0;
+    }
+    autocor_timer ++
 }
 
 
@@ -81,7 +116,7 @@ void updateStateFromFlags(void) {
     */
 }
 
-float mean(float x[]){
+float mean(unsigned x[]){
     float sum=0; //Pretty simple, adds the elements of x
     for(i = 0; i < x.length; i ++){
         sum += x[i];
@@ -89,7 +124,7 @@ float mean(float x[]){
     return sum/x.length //Then returns the mean
 }
 
-float autocorrelation(float x[]){
+float autocorrelation(unsigned x[]){
     float mean = mean(x); //First just get the average
 
     float autocorrelation[x.length/2]; /*Its only going to be half the length of x,
@@ -125,6 +160,13 @@ int main(void){
     -Wait on CAN
     -Infinite loop checking shutdown state!
     */
-
     initTimer();
+
+    while(1) {
+        if(bit_is_set(gTimerFlag, READ_HE)) {
+            
+        }
+    }
+
+
 }
