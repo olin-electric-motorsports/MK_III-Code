@@ -196,6 +196,21 @@ def remove_includes(head, board):
     os.system(out)
     os.chdir(head)
 
+def clean_wkdr(head, board):
+    '''
+    This function cleans the working directory for building
+    '''
+    os.chdir(head + '/lib/')
+    includes = glob.glob('*')
+    os.chdir(head)
+    os.chdir(board)
+    out = 'rm '
+    for x in includes:
+        out = out + x + ' '
+    os.system(out)
+    os.chdir(head)
+
+
 
 if __name__ == "__main__":
     # TODO
@@ -221,6 +236,7 @@ if __name__ == "__main__":
 
             # check_build_date(board, dir, cwd)
 
+            clean_wkdr(cwd, dir)
             ensure_setup(board, dir, cwd)
             libs = make_libs(cwd)
             clean(board, dir, cwd)
