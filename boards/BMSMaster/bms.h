@@ -3,15 +3,19 @@
 #define IMD_SENSE_PORT          PORTC
 
 /* FLAGS */
+// Sensing Flags
 #define BSPD_CURRENT            0b00000001
-#define READ_VALS_FLAG          0b00000001
-#define UNDER_VOLTAGE           0b00000001
-#define OVER_VOLTAGE            0b00000001
-#define SOFT_OVER_VOLTAGE       0b00000001
-#define OVER_TEMP               0b00000001
-#define OPEN_SHUTDOWN           0b00000001
+#define READ_VALS_FLAG          0b00000010
+#define UNDER_VOLTAGE           0b00000100
+#define OVER_VOLTAGE            0b00001000
+#define SOFT_OVER_VOLTAGE       0b00010000
+#define OVER_TEMP               0b00100000
+#define OPEN_SHUTDOWN           0b01000000
+
+// Relay Flags
 #define AIRS_CLOSED             0b00000001
-#define IMD_TRIPPED             0b00000001
+#define IMD_TRIPPED             0b00000010
+
 
 /* LEDs */
 #define LED_1                   PB3 //TODO change -->
@@ -38,7 +42,7 @@
 #define MUX_2_ADDRESS           0x48
 
 /* LTC68xx defs */
-#define TOTAL_IC                6 //TODO change -->
+#define TOTAL_IC                8 //TODO change -->
 
 #define ENABLED                 1
 #define DISABLED                0
