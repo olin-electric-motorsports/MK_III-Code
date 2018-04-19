@@ -33,7 +33,7 @@
 /* I/O */
 #define RELAY_PIN               PB2 //TODO change -->
 #define RELAY_PORT              PORTB
-#define FAN_PIN                 PC1 //TODO change -->
+#define FAN_PIN                 PC1
 #define FAN_PORT                PORTC
 
 /* MUX defs */

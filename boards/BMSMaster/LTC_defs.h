@@ -1,3 +1,5 @@
+#include "bms.h"
+
 #define MD_422HZ_1KHZ 0
 #define MD_27KHZ_14KHZ 1
 #define MD_7KHZ_3KHZ 2
@@ -36,10 +38,3 @@
 
 #define PULL_UP_CURRENT 1
 #define PULL_DOWN_CURRENT 0
-
-#define CELL_CHANNELS 12
-#define AUX_CHANNELS 6
-#define STAT_CHANNELS 4
-#define CELL 1
-#define AUX 2
-#define STAT 3

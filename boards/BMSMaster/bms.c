@@ -7,7 +7,7 @@ Author:
 
 /*----- Includes -----*/
 #include <stdio.h>
-#include <stdlib.io>
+#include <stdlib.h>
 #include <string.h>
 #include <avr/io.h>
 #include <avr/interrupt.h>
@@ -123,7 +123,7 @@ ISR(TIMER0_COMPA_vect) {
 
 
 /*----- Timers -----*/
-void init_read_timer(void) {    //TODO not sure about logic
+void init_read_timer(void) {
     TCCR0A &= ~(_BV(WGM11) | _BV(WGM10));   // Set timer in CTC mode with reset on match with OCR1A
     TCCR0B &= ~(_BV(CS11));
     TCCR0B |= _BV(CS10);
@@ -134,12 +134,12 @@ void init_read_timer(void) {    //TODO not sure about logic
 }
 
 void init_fan_pwm(uint8_t duty_cycle) {     //TODO change compare pins
-    //Output compare pin is TODO, so we need OCR1B TODO as our counter
-    TCCR1B |= _BV(CS00);    // Clock prescale set to max speed
+    //Output compare pin is OC1B, so we need OCR1B as our counter
+    TCCR1B |= _BV(CS00);                    // Clock prescale set to max speed
     TCCR1B |= _BV(WGM12);
     TCCR1A |= _BV(COM1B1) | _BV(WGM10);     // Fast PWM 8-bit mode
-    TCCR1A &= ~_BV(COM1B0);     // Set on match, clear on top
-    DDRC |= _BV(FAN_PIN);       // Enable fan pin
+    TCCR1A &= ~_BV(COM1B0);                 // Set on match, clear on top
+    DDRC   |= _BV(FAN_PIN);                 // Enable fan pin
 
     OCR1B = (uint8_t)(duty_cycle);
 }

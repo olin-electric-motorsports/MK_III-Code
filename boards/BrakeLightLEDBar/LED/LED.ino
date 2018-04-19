@@ -3,7 +3,7 @@
     state on an Adafruit LED backpack.
 
     @author: Peter Seger
-    ©Olin Electric Motorsports 2018
+    Released under MIT License 2018
     Adafruit Documentation: https://learn.adafruit.com/adafruit-led-backpack/downloads
 */
 

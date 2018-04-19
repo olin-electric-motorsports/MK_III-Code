@@ -4,7 +4,7 @@ For more information on the team: https://www.olinelectricmotorsports.com/
 
 @author: Peter Seger '20
 
-Released under MIT License 2017
+Released under MIT License 2018
 '''
 
 
