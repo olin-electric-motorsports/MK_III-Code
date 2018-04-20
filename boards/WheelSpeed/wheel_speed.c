@@ -36,17 +36,15 @@ Author:
 
 //Timer Flag positions
 #define READ_HE     0
-#define RUN_AUTOC   1
+#define CALC_SPEED   1
 
 /*----- Global Variables -----*/
 volatile uint8_t gFlag = 0x00;  // Global Flag
 volatile uint8_t gTimerFlag = 0x01;     // Timer flag
 unit8_t gCANMessage[8] = {0, 0, 0, 0, 0, 0, 0, 0};  // CAN Message
 
-unsigned Left_1_Data[]
-unsigned Left_2_Data[]
-unsigned Right_1_Data[]
-unsigned Right_2_Data[]
+unsigned Left_Data[]
+unsigned Right_Data[]
 
 unit8_t RandomVar = 0x00;
 
@@ -87,7 +85,7 @@ ISR(TIMER0_COMPA_vect) {
 
     sensor_timer ++
     if(autocor_timer > 500){
-        gTimerFlag |= _BV(RUN_AUTOC);
+        gTimerFlag |= _BV(CALC_SPEED);
         autocor_timer = 0;
     }
     autocor_timer ++
@@ -146,6 +144,8 @@ float calculate_speed(float autocor[]){
     /*hm...*/
 }
 
+
+
 //TODO any other functionality goes here
 
 
@@ -164,7 +164,19 @@ int main(void){
 
     while(1) {
         if(bit_is_set(gTimerFlag, READ_HE)) {
-            
+            // Left_1 = PB2
+            // Left_2 = PD7
+            // Right_1 = PB5
+            // Right_2 = PC6
+            //These all need stuff appended to them, basically
+            //Wait but I need to do it with the comparator
+
+        }
+        if(bit_is_set(gTimerFlag, CALC_SPEED)) {
+            float left_auto[] = autocorrelation(Left_Data)
+            float right_auto[] = autocorrelation(Right_Data)
+
+
         }
     }
 
