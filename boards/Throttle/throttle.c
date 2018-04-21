@@ -13,6 +13,7 @@ Author:
 #include <avr/io.h>
 #include <avr/interrupt.h>
 #include <util/delay.h>
+#include "can_api.h"
 
 /*----- Macro Definitions -----*/
 /* Shutdown */
@@ -170,20 +171,22 @@ ISR(CAN_INT_vect) {
 ISR(PCINT0_vect) {
     /*
     Standard Pin Change Interupt
+    PCINT0 covers pins PCINT0-PCINT7
+    Writes value to PINx
     */
-    if(bit_is_set(SD_PORT,SD_INERTIA)){
+    if(bit_is_set(PINB,SD_INERTIA)){
         gFlag |= _BV(FLAG_INERTIA);
     } else {
         gFlag &= ~_BV(FLAG_INERTIA);
     }
 
-    if(bit_is_set(SD_PORT,SD_ESTOP)){
+    if(bit_is_set(PINB,SD_ESTOP)){
         gFlag |= _BV(FLAG_ESTOP);
     } else {
         gFlag &= ~_BV(FLAG_ESTOP);
     }
 
-    if(bit_is_set(SD_PORT,SD_BOTS)){
+    if(bit_is_set(PINB,SD_BOTS)){
         gFlag |= _BV(FLAG_BOTS);
     } else {
         gFlag &= ~_BV(FLAG_BOTS);
@@ -234,14 +237,27 @@ void checkShutdownState(void)   {
         -IF they are, set CAN list position to 0xFF
         -ELSE do set CAN list position to 0x00
     */
-    if(bit_is_set(gFlag,FLAG_AIRS)){
-        GLOBAL_SHUTDOWN = 0xFF;
+    if(bit_is_set(gFlag,FLAG_ESTOP)){
+        gCANMessage[CAN_DRIVER_E_STOP] = 0xFF;
+        // LED2_PORT |= _BV(LED2);
+    } else {
+        gCANMessage[CAN_DRIVER_E_STOP] = 0x00;
+        // LED2_PORT &= ~_BV(LED2);
     }
     if(bit_is_set(gFlag,FLAG_INERTIA)) {
-        GLOBAL_SHUTDOWN = 0xFF;
+        gCANMessage[CAN_INTERTIA]= 0xFF;
+        // LED3_PORT |= _BV(LED3);
+    } else {
+        gCANMessage[CAN_INTERTIA] = 0x00;
+        // LED3_PORT &= ~_BV(LED3);
     }
     if(bit_is_set(gFlag,FLAG_BOTS)){
-        GLOBAL_SHUTDOWN = 0xFF;
+        gCANMessage[CAN_BOTS] = 0xFF;
+        // GLOBAL_SHUTDOWN = 0xFF;
+        // LED1_PORT |= _BV(LED1);
+    } else {
+        gCANMessage[CAN_BOTS] = 0x00;
+        // LED1_PORT &= ~_BV(LED1);
     }
 }
 
@@ -249,10 +265,11 @@ void updateStateFromFlags(void) {
     /*
     Based off the state of the flag(s), update components and send CAN
     */
+
 }
 
 
-void checkSensors(void) {
+void testInputs(int test) {
     /* For troubleshooting sensors
        Use this to test each sensor, they should all
        have pull up resistors which means a disconnect
@@ -260,10 +277,62 @@ void checkSensors(void) {
        should turn on if they've been initiated correctly
     */
 
-    /*--- Read values from ADC ---*/
+
+    /*--- Set LED's on if > 50% ---*/
+    /*--- Pull ups' on all three ---*/
+    if(test == 1){
+
+        if(throttle1 > gThrottleThreshold){
+            LED2_PORT |= _BV(LED2);
+        } else {
+            LED2_PORT &= ~_BV(LED2);
+        }
+
+        if(throttle2 > gThrottleThreshold){
+            LED3_PORT |= _BV(LED3);
+        } else {
+            LED3_PORT &= ~(_BV(LED3));
+        }
+
+        if(steering > gSteering){
+            LED1_PORT |= _BV(LED1);
+        } else {
+            LED1_PORT &= ~(_BV(LED1));
+        }
+    }
+
+    if(test == 2){
+
+        if(bit_is_set(gFlag,FLAG_ESTOP)){
+            LED2_PORT |= _BV(LED2);
+        } else {
+            LED2_PORT &= ~_BV(LED2);
+        }
+        if(bit_is_set(gFlag,FLAG_INERTIA)) {
+            LED3_PORT |= _BV(LED3);
+        } else {
+            LED3_PORT &= ~_BV(LED3);
+        }
+        if(bit_is_set(gFlag,FLAG_BOTS)){
+            LED1_PORT |= _BV(LED1);
+        } else {
+            LED1_PORT &= ~_BV(LED1);
+        }
+    }
+
+
+
+
+}
+
+void readPots(void) {
+    /* Read values from ADC and store them
+       in their appropriate variables
+       Reads: throttle1,throttle2, and steering
+    */
 
     ADMUX = _BV(REFS0);
-    ADMUX |= 8;
+    ADMUX |= 8; //pin is also known as ADC8
     ADCSRA |= _BV(ADSC);
     loop_until_bit_is_clear(ADCSRA, ADSC);
     uint8_t throttle1 = (uint8_t) (ADC >> 2);
@@ -279,29 +348,6 @@ void checkSensors(void) {
     ADCSRA |= _BV(ADSC);
     loop_until_bit_is_clear(ADCSRA, ADSC);
     uint8_t steering = (uint8_t) (ADC >> 2);
-
-    /*--- Set LED's on if > 50% ---*/
-    /*--- Pull ups' on all three ---*/
-
-    if(throttle1 > gThrottleThreshold){
-        LED2_PORT |= _BV(LED2);
-    } else {
-        LED2_PORT &= ~_BV(LED2);
-    }
-
-    if(throttle2 > gThrottleThreshold){
-        LED3_PORT |= _BV(LED3);
-    } else {
-        LED3_PORT &= ~(_BV(LED3));
-    }
-
-    if(steering > gSteering){
-        LED1_PORT |= _BV(LED1);
-    } else {
-        LED1_PORT &= ~(_BV(LED1));
-    }
-
-
 
 
 }
@@ -320,7 +366,7 @@ int main(void){
     sei();
 
     // Set interrupt registers
-    PCIR |= _BV(PCIE0);
+    PCICR |= _BV(PCIE0);
     PCMSK0 |= _BV(PCINT5) | _BV(PCINT6) | _BV(PCINT7);
 
     // Set pins to output
@@ -329,7 +375,7 @@ int main(void){
     DDRB |= _BV(LED3);
     DDRC |= _BV(RTD_LD);
 
-    // set pull up res for steering
+    // set pull up resistor for steering
     STEERING_PORT |= _BV(STEERING);
 
     // turn on RTD for .4 seconds
@@ -339,7 +385,10 @@ int main(void){
 
 
     while(1){
-        checkSensors();
+        // checkSensors();
+        readPots();
+        checkShutdownState();
+        // testInputs(1);
     }
 
 }
