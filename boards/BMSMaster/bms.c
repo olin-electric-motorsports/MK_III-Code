@@ -49,7 +49,8 @@ uint8_t rx_cfg[TOTAL_IC][6];
 
 
 
-volatile uint8_t gFlag = 0x00;  // Global Flag
+volatile uint8_t gFlag = 0x00;          // Global Flag
+volatile uint8_t gRelayFlag = 0x00;     // Relay Flag
 uint8_t gCANMessage[8] = {0, 0, 0, 0, 0, 0, 0, 0};  // CAN Message
 
 
@@ -70,35 +71,36 @@ uint8_t timer_counter;
 ISR(CAN_INT_vect) {
     // Check first board (AIR Control)
     CANPAGE = (0 << MOBNB0);
-    if(bit_is_set(CANSTMOB, RXOK)) {
+    // TODO how to chose which message to grab?
+    if(bit_is_set(CANSTMOB, RXOK)) {  //DEBUG what goes
         volatile uint8_t msg = CANSMG;      //grab the first byte of the CAN message
         msg = CANMSG;
         can_recv_msg[0] = msg;
         can_recv_msg[1] = 0x99;
 
         if(msg == 0xFF) {
-            gFlag |= AIRS_CLOSED;           //trip flag
+            gRelayFlag |= AIRS_CLOSED;           //trip flag
         } else {
-            gFlag &= ~AIRS_CLOSED;          //reset flag
+            gRelayFlag &= ~AIRS_CLOSED;          //reset flag
         }
 
         //Setup to Receive Again
         CANSTMOB = 0x00;
-        CAN_wait_on_receive(0, CAN_ID_AIR_CONTROL, ,);  //TODO change!
+        CAN_wait_on_receive(0, CAN_ID_AIR_CONTROL);  //TODO change!
     }
 
-    //Check for BMS open Relay
+    //Check for BMS open Relay      TODO figure out
     CANPAGE = (4 << MOBNB0);
     if(bit_is_set(CANSTMOB, RXOK)) {
         volatile uint8_t msg = CANMSG;
 
         if(msg != 0x00) {
-            gFlag |= OPEN_SHUTDOWN;
+            gRelayFlag |= OPEN_SHUTDOWN;
         }
 
         //Setup to Receive Again
         CANSTMOB = 0x00;
-        CAN_wait_on_receive(4, board1, board2, board3);     //TODO change!
+        CAN_wait_on_receive(4, CAN_ID_AIR_CONTROL);     //TODO change!
     }
 }
 
@@ -167,7 +169,7 @@ uint8_t read_all_voltages(void) {
                 gFLAG |= SOFT_OVER_VOLTAGE;
 
                 // Check AIRs
-                if (gFLAG & AIRS_CLOSED) {
+                if (gRelayFlag & AIRS_CLOSED) {
                     enable_discharge(i+1, j+1);     // IC and Cell are 1-indexed
                 }
             }
@@ -360,7 +362,8 @@ int main(void){
     DDRB |= _BV(LED_1) | _BV(LED_2) | _BV(LED_3); // Internal LEDs
     DDRC |= _BV(RJ45_LED_GREEN) | _BV(RJ45_LED_ORANGE); // External LEDs
 
-    PORTB |= _BV(RELAY);    // close relay
+    // Close Relay
+    RELAY_PORT |= _BV(RELAY_PIN);
 
     // Setup Interrupts
     PCICR |= _BV(PCIE0); // TODO change -->
@@ -371,7 +374,8 @@ int main(void){
 
     // CAN Initialization
     CAN_init(CAN_ENABLED);
-    CAN_wait_on_receive(0, CAN_ID_AIR_CONTROL,, ) // TODO Which boards to listen?!
+    CAN_wait_on_receive(0, CAN_ID_AIR_CONTROL);
+    CAN_wait_on_receive(4, CAN_ID_BMS_DISCHARGE);
 
     // Initialization Timer
     init_read_timer();
@@ -390,13 +394,15 @@ int main(void){
     PORTD |= _BV(PD3);
     PORTB |= _BV(PB4);
 
-    // Send Tester Message
+    // Send Tester Messages
     uint8_t test_msg[8] = {0, 0, 0, 0, 0, 0, 0, 0};
-    CAN_transmit(BROADCAST_MOb, CAN_ID_BMS_MASTER, CAN_LEN_BMS_MASTER, test_msg);
+    CAN_transmit(BROADCAST_BMS_MASTER, CAN_ID_BMS_MASTER, CAN_LEN_BMS_MASTER, test_msg);
+    CAN_transmit(BROADCAST_BMS_VOLTAGE, CAN_ID_BMS_VOLT, CAN_LEN_BMS_VOLT, test_msg);
+    CAN_transmit(BROADCAST_BMS_TEMP, CAN_ID_BMS_TEMP, CAN_LEN_BMS_TEMP, test_msg);
 
     while(1) {
         // Check Shutdown
-        if(gFlag & OPEN_SHUTDOWN) {
+        if(gRelayFlag & OPEN_SHUTDOWN) {
             RELAY_PORT &= ~_BV(RELAY_PIN);
         }
         // Check Under Voltage
@@ -418,7 +424,7 @@ int main(void){
             LED_3_PORT &= _BV(LED_3);
         }
         // Check AIRs
-        if(gFlag & AIRS_CLOSED) {
+        if(gRelayFlag & AIRS_CLOSED) {
             RJ45_ORANGE_PORT |= _BV(RJ45_LED_ORANGE);
         } else {
             RJ45_ORANGE_PORT &= _BV(RJ45_LED_ORANGE);
