@@ -20,8 +20,8 @@ Author:
 #define GLOBAL_SHUTDOWN         0x0
 
 /* Throttle */
-#define THROTTLE_1              PC4
-#define THROTTLE_2              PC5
+#define THROTTLE_1              PC4 //Throttle left
+#define THROTTLE_2              PC5 //Throttle right
 #define THROTTLE_PORT           PORTC
 
 /* Steering */
@@ -64,6 +64,7 @@ Author:
 #define FLAG_INERTIA            3
 #define FLAG_ESTOP              4
 #define FLAG_BOTS               5
+#define FLAG_THROTTLE_10        6
 
 /* MOBs */
 // Mesage OBjects, or mailboxes?
@@ -75,11 +76,12 @@ Author:
 
 //TODO
 /*ATmega must:
--Sense 3 shutdown Lines
+-Sense 3 shutdown Lines (check)
 -Read and send steering pot value
--Read both throttle pots
+-Read both throttle pots (check)
+-Map out both throttle pots
 -Send out throttle value over CAN
--Wait on RTD and trigger it
+-Wait on RTD and trigger it (check ish...)
 */
 
 /*----- Global Variables -----*/
@@ -88,8 +90,9 @@ volatile uint8_t gTimerFlag = 0x01; // Timer Flag
 
 uint8_t gThrottle[2] = {0x00,0x00};
 uint8_t gThrottle_smoothed = 0x00;
-uint8_t gThrottleThreshold = 0x7F;
-uint8_t gSteering = 0x7F;
+uint8_t gThrottleThreshold = 0x66;//A6;
+uint8_t gSteering = 0x00;
+uint8_t gSteeringThreshold = 0x7F;
 
 uint8_t gCANMessage[8] = {0, 0, 0, 0, 0, 0, 0, 0};  // CAN Message
 
@@ -239,25 +242,19 @@ void checkShutdownState(void)   {
     */
     if(bit_is_set(gFlag,FLAG_ESTOP)){
         gCANMessage[CAN_DRIVER_E_STOP] = 0xFF;
-        // LED2_PORT |= _BV(LED2);
     } else {
         gCANMessage[CAN_DRIVER_E_STOP] = 0x00;
-        // LED2_PORT &= ~_BV(LED2);
     }
     if(bit_is_set(gFlag,FLAG_INERTIA)) {
         gCANMessage[CAN_INTERTIA]= 0xFF;
-        // LED3_PORT |= _BV(LED3);
     } else {
         gCANMessage[CAN_INTERTIA] = 0x00;
-        // LED3_PORT &= ~_BV(LED3);
     }
     if(bit_is_set(gFlag,FLAG_BOTS)){
         gCANMessage[CAN_BOTS] = 0xFF;
         // GLOBAL_SHUTDOWN = 0xFF;
-        // LED1_PORT |= _BV(LED1);
     } else {
         gCANMessage[CAN_BOTS] = 0x00;
-        // LED1_PORT &= ~_BV(LED1);
     }
 }
 
@@ -275,6 +272,10 @@ void testInputs(int test) {
        have pull up resistors which means a disconnect
        would result in a 5V reading and therefore the LEDs
        should turn on if they've been initiated correctly
+       test == 1 checks the pots on the car.
+       test == 2 checks the interrpt flags for the shutdown circuit
+       test == 3 checks if the throttle is 10% to one another which should only happen at 0
+
     */
 
 
@@ -282,25 +283,27 @@ void testInputs(int test) {
     /*--- Pull ups' on all three ---*/
     if(test == 1){
 
-        if(throttle1 > gThrottleThreshold){
+        if(gThrottle[1] > gThrottleThreshold){
             LED2_PORT |= _BV(LED2);
         } else {
             LED2_PORT &= ~_BV(LED2);
         }
 
-        if(throttle2 > gThrottleThreshold){
+        if(gThrottle[0] > gThrottleThreshold){
             LED3_PORT |= _BV(LED3);
         } else {
             LED3_PORT &= ~(_BV(LED3));
         }
 
-        if(steering > gSteering){
+        if(gSteering > gSteeringThreshold){
             LED1_PORT |= _BV(LED1);
         } else {
             LED1_PORT &= ~(_BV(LED1));
         }
     }
 
+    /*--- Test shutdown circuit flags ---*/
+    // Uses the PCINT vectors
     if(test == 2){
 
         if(bit_is_set(gFlag,FLAG_ESTOP)){
@@ -320,6 +323,22 @@ void testInputs(int test) {
         }
     }
 
+    /*--- Test 10% throttle pots --*/
+    // Uses global flag for throttle_10
+    if(test == 3){
+
+        if(bit_is_set(gFlag,FLAG_THROTTLE_10)){
+            LED1_PORT |= _BV(LED1);
+            LED2_PORT |= _BV(LED2);
+            LED3_PORT |= _BV(LED3);
+
+        } else {
+            LED1_PORT &= ~_BV(LED1);
+            LED2_PORT &= ~_BV(LED2);
+            LED3_PORT &= ~_BV(LED3);
+        }
+    }
+
 
 
 
@@ -330,6 +349,7 @@ void readPots(void) {
        in their appropriate variables
        Reads: throttle1,throttle2, and steering
     */
+    gFlag &= ~_BV(FLAG_THROTTLE_10);
 
     ADMUX = _BV(REFS0);
     ADMUX |= 8; //pin is also known as ADC8
@@ -348,6 +368,24 @@ void readPots(void) {
     ADCSRA |= _BV(ADSC);
     loop_until_bit_is_clear(ADCSRA, ADSC);
     uint8_t steering = (uint8_t) (ADC >> 2);
+
+    uint8_t err = 0;
+    if (throttle1 > throttle2 && (throttle1 - throttle2) <= (0xFF/10)) {
+        err = 1;
+        // throttle_10_count++;
+        gFlag |= _BV(FLAG_THROTTLE_10);
+    }
+    else if (throttle2 > throttle1 && (throttle2 - throttle1) <= (0xFF/10)) {
+        err = 1;
+        // throttle_10_count++;
+        gFlag |= _BV(FLAG_THROTTLE_10);
+    }
+
+
+
+    gThrottle[0] = throttle1;
+    gThrottle[1] = throttle2;
+    gSteering = steering;
 
 
 }
@@ -385,10 +423,9 @@ int main(void){
 
 
     while(1){
-        // checkSensors();
-        readPots();
         checkShutdownState();
-        // testInputs(1);
+        readPots();
+        testInputs(1);
     }
 
 }
