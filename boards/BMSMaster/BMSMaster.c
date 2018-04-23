@@ -7,7 +7,6 @@ Author:
 
 /*----- Includes -----*/
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 #include <avr/io.h>
 #include <avr/interrupt.h>
@@ -15,7 +14,7 @@ Author:
 #include "LTC_defs.h"
 #include "can_api.h"
 
-#include "bms.h"
+#include "BMSMaster.h"
 #include "ltc6811_api.c"
 #include "ltc6804_api.c"
 #include "spi_api.c"
@@ -86,7 +85,7 @@ ISR(CAN_INT_vect) {
 
         //Setup to Receive Again
         CANSTMOB = 0x00;
-        CAN_wait_on_receive(0, CAN_ID_AIR_CONTROL);  //TODO change!
+        CAN_wait_on_receive(0, CAN_ID_AIR_CONTROL, CAN_LEN_AIR_CONTROL, 0xFF);  //TODO change!
     }
 
     //Check for BMS open Relay      TODO figure out
@@ -100,7 +99,7 @@ ISR(CAN_INT_vect) {
 
         //Setup to Receive Again
         CANSTMOB = 0x00;
-        CAN_wait_on_receive(4, CAN_ID_AIR_CONTROL);     //TODO change!
+        CAN_wait_on_receive(4, CAN_ID_AIR_CONTROL, CAN_LEN_AIR_CONTROL, 0xFF);     //TODO change!
     }
 }
 
@@ -374,8 +373,8 @@ int main(void){
 
     // CAN Initialization
     CAN_init(CAN_ENABLED);
-    CAN_wait_on_receive(0, CAN_ID_AIR_CONTROL);
-    CAN_wait_on_receive(4, CAN_ID_BMS_DISCHARGE);
+    CAN_wait_on_receive(0, CAN_ID_AIR_CONTROL, CAN_LEN_AIR_CONTROL, 0xFF);
+    CAN_wait_on_receive(4, CAN_ID_BMS_DISCHARGE, CAN_LEN_BMS_DISCHARGE, 0xFF);
 
     // Initialization Timer
     init_read_timer();

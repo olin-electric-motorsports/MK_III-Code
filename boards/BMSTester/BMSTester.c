@@ -5,7 +5,7 @@
 #include <avr/wdt.h>
 #include "LTC_defs.h"
 #include "can_api.h"
-#include "main.h"
+#include "BMSTester.h"
 
 // OEM defs
 volatile uint8_t FLAGS = 0x00;
@@ -135,7 +135,7 @@ int main (void)
 
     //CAN init
     CAN_init(CAN_ENABLED);
-    CAN_wait_on_receive(0, CAN_IDT_AIR_CONTROL, CAN_IDT_AIR_CONTROL_L, CAN_IDM_single);
+    CAN_wait_on_receive(0, CAN_ID_AIR_CONTROL, CAN_LEN_AIR_CONTROL, 0xFF);
 
     // BMS Open Relay Message
     CAN_wait_on_receive(4, 0x02, 0x01, CAN_IDM_single);
@@ -185,7 +185,7 @@ int main (void)
         }
 
         if (FLAGS & UNDER_VOLTAGE) { //Set LED D7, PB5
-            PORTB |= _BV(PROG_LED_1); 
+            PORTB |= _BV(PROG_LED_1);
         } else {
             PORTB &= ~_BV(PROG_LED_1);
         }
@@ -214,11 +214,11 @@ int main (void)
             CAN_transmit(1,0x19,1,flags_msg);
             _delay_ms(5);
             CAN_transmit(1, 0x18, 2, can_recv_msg);
-            can_recv_msg[1] =  0x55; 
+            can_recv_msg[1] =  0x55;
             _delay_ms(5);
         }
 
-        if (FLAGS & READ_VALS) { 
+        if (FLAGS & READ_VALS) {
             EXT_LED_PORT ^= _BV(LED_GREEN);
             uint8_t error = 0;
             error += read_all_voltages();
@@ -232,9 +232,9 @@ int main (void)
 
             //uint8_t test_msg[8] =  {1,2,3,4,5,6,7,8};
             //CAN_transmit(0, 0x13, 8, test_msg);
-            
+
             FLAGS &= ~READ_VALS;
-            CAN_wait_on_receive(0, CAN_IDT_AIR_CONTROL, CAN_IDT_AIR_CONTROL_L, CAN_IDM_single);
+            CAN_wait_on_receive(0, CAN_ID_DASHBOARD, CAN_LEN_DASHBOARD, 0xFF);
         }
 
         if (bit_is_set(IMD_SENSE_PIN_REG, IMD_SENSE_PIN)) {
@@ -256,9 +256,9 @@ ISR(CAN_INT_vect){
     if (bit_is_set(CANSTMOB, RXOK)) {
         volatile uint8_t msg = CANMSG; //grab the first byte of the CAN message
         msg = CANMSG;
-        can_recv_msg[0] =  msg; 
-        can_recv_msg[1] =  0x99; 
-        
+        can_recv_msg[0] =  msg;
+        can_recv_msg[1] =  0x99;
+
 
         if (msg == 0xFF) {
             FLAGS |= AIRS_CLOSED;
@@ -270,7 +270,7 @@ ISR(CAN_INT_vect){
 
         //setup to receive again
         CANSTMOB = 0x00;
-        CAN_wait_on_receive(0, CAN_IDT_AIR_CONTROL, CAN_IDT_AIR_CONTROL_L, CAN_IDM_single);
+        CAN_wait_on_receive(0, CAN_ID_AIR_CONTROL, CAN_LEN_AIR_CONTROL, 0xFF);
     }
 
     // BMS Open Relay message
@@ -281,7 +281,7 @@ ISR(CAN_INT_vect){
         if (msg != 0x00) {
             FLAGS |= OPEN_SHDN;
         }
-        
+
         CANSTMOB = 0x00;
         CAN_wait_on_receive(4, 0x02, 0x01, CAN_IDM_single);
     }
@@ -376,7 +376,7 @@ void transmit_temperatures(void)
 }
 
 /*!<
-  Cell Discharge Status will be transmitted in this CAN message, LSB 
+  Cell Discharge Status will be transmitted in this CAN message, LSB
   |           msg[0] |           msg[1] |           msg[2] |           msg[3] |    .....     |            msg[5] |            msg[6] |
   |------------------|------------------|------------------|------------------|--------------|-------------------|-------------------|
   |IC group (0 or 1) |IC1 Status High   |IC1 Status Low    |IC2 Status High   |    .....     |msg Cell 3 High    |IC 3 Status Low    |
@@ -439,7 +439,7 @@ uint8_t read_all_voltages(void) // Start Cell ADC Measurement
     error = o_ltc6811_rdcv(0,TOTAL_IC,cell_codes); //Parse ADC measurements
 
     for (uint8_t i = 0; i < TOTAL_IC; i++) {
-        
+
         for (uint8_t j = 0; j < CELL_CHANNELS; j++) {
             disable_discharge(i+1, j+1); //IC and Cell are 1-indexed}
             if (cell_codes[i][j] > OV_THRESHOLD) {
@@ -449,11 +449,11 @@ uint8_t read_all_voltages(void) // Start Cell ADC Measurement
 
             if (cell_codes[i][j] > SOFT_OV_THRESHOLD) {
                 FLAGS |= SOFT_OVER_VOLTAGE;
-                
+
                 if (FLAGS & AIRS_CLOSED){
                     enable_discharge(i+1, j+1); //IC and Cell are 1-indexed
-                } 
-            } 
+                }
+            }
 
             if (cell_codes[i][j] < UV_THRESHOLD) {
                 FLAGS |= UNDER_VOLTAGE;
