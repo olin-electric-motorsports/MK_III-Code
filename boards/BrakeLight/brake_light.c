@@ -13,6 +13,7 @@ Author:
 #include <string.h>
 #include <avr/io.h>
 #include <avr/interrupt.h>
+#include "brake_light_32.c"
 
 /*----- Macro Definitions -----*/
 /* Brake */
@@ -51,7 +52,6 @@ Author:
 #define CAN_MAIN_FUSE       7
 
 #define BROADCAST_MOb       0
-
 
 
 /* Sense LEDs */
@@ -285,6 +285,9 @@ int main(void){
             // Send CAN message
             CAN_transmit(BROADCAST_MOb, CAN_ID_BRAKE_LIGHT,
                 CAN_LEN_BRAKE_LIGHT, gCAN_MSG);
+
+            send_LED_bar();
+
         }
     }
 }
