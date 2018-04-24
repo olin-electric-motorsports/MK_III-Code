@@ -26,11 +26,11 @@ MCU = 'atmega16m1'
 PART = 'm16'
 F_CPU = '4000000UL'
 COMPILER = 'gnu99'
-FUSE = '0x62'
+FUSE = '0x65'
 
 CFLAGS = '-Os -g -mmcu=' + MCU + ' -std=' + COMPILER + ' -Wall -Werror -ff'
 LDFLAG = '-mmcu=' + MCU + ' -lm -std=' + COMPILER
-AVRFLAGS = '-p -B2 ' + MCU + ' -v -c ' + PROGRAMMER + ' -p ' + PART
+AVRFLAGS = '-B5 -v -c' + PROGRAMMER + ' -p ' + MCU + '-P' + PORT
 
 possible_boards = []
 
@@ -79,7 +79,7 @@ def make_elf(board, dir, libs, head):
     for item in c_files:
         includes = includes + str(item) + (' ')
     out = out + includes + LDFLAG + ' -o ' + board + '.elf'
-    print(out)
+    # print(out)
     outs = 'outs/'
     os.system(out)            #Write command to system
     cmd = 'mv *.elf outs/'
@@ -158,7 +158,7 @@ def check_build_date(board, dir, head):
             c_time = os.path.getctime(files[0])
             # if <= c_time <
 
-        print(out_time)
+        # print(out_time)
         os.chdir(head)
 
 def make_all(head, boards):

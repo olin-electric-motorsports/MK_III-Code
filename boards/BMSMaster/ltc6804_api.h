@@ -1,9 +1,19 @@
-#include <stdio.h>
-#include <string.h>
-#include <avr/io.h>
-#include <avr/interrupt.h>
-#include <avr/wdt.h>
 #include "crc15.c"
+#include "BMSMaster.h"
+#include "LTC_defs.h"
+#include <stdlib.h>
+#include "spi_api.h"
+
+
+const uint16_t OV_THRESHOLD = 36000;//35900; // Over voltage threshold ADC Code. LSB = 0.0001
+const uint16_t SOFT_OV_THRESHOLD = 36200;//35500; //Soft over-voltage for discharge
+const uint16_t UV_THRESHOLD = 22000; //20000;// Under voltage threshold ADC Code. LSB = 0.0001
+
+//Thermistor voltage times this number must be greater than measured bus voltage (times 1000 for AVR)
+const uint16_t THERM_V_FRACTION = 3807; //Maximum fraction is 99/26 = 3.807 (1% top thermistors, therm 26K at 58 C)
+
+
+const uint8_t ADC_OPT = ADC_OPT_DISABLED; // See ltc6811_daisy.h for Options
 
 
 void init_cfg(void);

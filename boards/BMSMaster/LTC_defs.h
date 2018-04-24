@@ -1,4 +1,4 @@
-#include "bms.h"
+#include "BMSMaster.h"
 
 #define MD_422HZ_1KHZ 0
 #define MD_27KHZ_14KHZ 1

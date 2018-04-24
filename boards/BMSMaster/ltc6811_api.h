@@ -4,7 +4,7 @@
 #include <avr/interrupt.h>
 #include <avr/wdt.h>
 #include "crc15.c"
-#include "bms.h"
+#include "BMSMaster.h"
 
 
 

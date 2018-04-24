@@ -9,6 +9,7 @@ Author:
 #include <stdio.h>
 #include <string.h>
 #include <avr/io.h>
+#include <util/delay.h>
 #include <avr/interrupt.h>
 #include <avr/wdt.h>
 #include "LTC_defs.h"
@@ -42,9 +43,6 @@ const uint16_t UV_THRESHOLD = 22000;
 /* Thermistor Voltage */
 const uint16_t THERM_VOLTAGE_FRACTION = 3807 //TODO change -->
 
-/* Register Configuration for Communication with LTC6804 */
-uint8_t tx_cfg[TOTAL_IC][6];
-uint8_t rx_cfg[TOTAL_IC][6];
 
 
 
