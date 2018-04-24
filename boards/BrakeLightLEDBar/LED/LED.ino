@@ -1,3 +1,13 @@
+/*
+    Arduino code that decodes an analog signal sent over 4 wires and displays
+    state on an Adafruit LED backpack.
+
+    @author: Peter Seger
+    Released under MIT License 2018
+    Adafruit Documentation: https://learn.adafruit.com/adafruit-led-backpack/downloads
+*/
+
+
 #include <Wire.h>
 #include <Adafruit_GFX.h>
 #include "Adafruit_LEDBackpack.h"

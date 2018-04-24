@@ -22,11 +22,37 @@ Author:
 #define MACRO_1     1
 #define MACRO_2     2
 
+/*Sensor Pins*/
+#define LEFT1       PB2
+#define LEFT2       PD7
+#define RIGHT1      PB5
+#define RIGHT2      PC6
+
+/*LED's*/
+#define LED1        PB0
+#define LED2        PB1
+#define PROG_LED1   PB3
+#define PROG_LED2   PD6
+
+//Timer Flag positions
+#define READ_HE     0
+#define CALC_SPEED   1
+
 /*----- Global Variables -----*/
 volatile uint8_t gFlag = 0x00;  // Global Flag
+volatile uint8_t gTimerFlag = 0x01;     // Timer flag
 unit8_t gCANMessage[8] = {0, 0, 0, 0, 0, 0, 0, 0};  // CAN Message
 
+unsigned Left_Data[]
+unsigned Right_Data[]
+
 unit8_t RandomVar = 0x00;
+
+
+// Timer counters
+unit8_t clock_prescale = 0x00;  // Used for update timer ?? Does this matter? It was from BrakeLight but I don't know what it would do
+unit8_t sensor_timer = 0x00;     // Tells the sensor when to read?
+unit8_t autocor_timer = 0x00;     // Tells how often to calculate autocorrelation (and restart building the array of sensor values)
 
 /*----- Interrupt(s) -----*/
 // *pg 76 of datasheet*
@@ -51,6 +77,18 @@ ISR(TIMER0_COMPA_vect) {
     /*
     Timer/Counter0 compare match A
     */
+    //Number of cycles are total guesses and are very wrong
+    if(sensor_timer > 40){
+        gTimerFlag |= _BV(READ_HE);
+        sensor_timer = 0;
+    }
+
+    sensor_timer ++
+    if(autocor_timer > 500){
+        gTimerFlag |= _BV(CALC_SPEED);
+        autocor_timer = 0;
+    }
+    autocor_timer ++
 }
 
 
@@ -76,7 +114,41 @@ void updateStateFromFlags(void) {
     */
 }
 
+float mean(unsigned x[]){
+    float sum=0; //Pretty simple, adds the elements of x
+    for(i = 0; i < x.length; i ++){
+        sum += x[i];
+    }
+    return sum/x.length //Then returns the mean
+}
+
+float autocorrelation(unsigned x[]){
+    float mean = mean(x); //First just get the average
+
+    float autocorrelation[x.length/2]; /*Its only going to be half the length of x,
+    at least according the website I got this code from.*/
+    for (t = 0; t < autocorrelation.length; t ++){ //t is a lag
+        float n = 0; //initializes the numerator
+        float d = 0; // initializes the denominator
+        for (i = 0; i < x.length-t; i ++){ //Loops to length-t, to avoid the lag going past the end of the signal
+            float xim = x[i] - mean; //Error from the mean for each point
+            n += xim * (x[(i + t ) % x.length] - mean); //by summing, gets the covariance of the signal with itself at lag t
+            d += xim * xim //covariance of the signal with itself, effectively just the variance
+            }
+        autocorrelation[t] = n / d; //after summing, finds the autocorrelation at lag t
+    }
+    return autocorrelation
+}
+
+float calculate_speed(float autocor[]){
+    /*hm...*/
+}
+
+
+
 //TODO any other functionality goes here
+
+
 
 
 /*----- MAIN -----*/
@@ -88,6 +160,25 @@ int main(void){
     -Wait on CAN
     -Infinite loop checking shutdown state!
     */
-
     initTimer();
+
+    while(1) {
+        if(bit_is_set(gTimerFlag, READ_HE)) {
+            // Left_1 = PB2
+            // Left_2 = PD7
+            // Right_1 = PB5
+            // Right_2 = PC6
+            //These all need stuff appended to them, basically
+            //Wait but I need to do it with the comparator
+
+        }
+        if(bit_is_set(gTimerFlag, CALC_SPEED)) {
+            float left_auto[] = autocorrelation(Left_Data)
+            float right_auto[] = autocorrelation(Right_Data)
+
+
+        }
+    }
+
+
 }

@@ -7,15 +7,15 @@ Author:
 
 /*----- Includes -----*/
 #include <stdio.h>
-#include <stdlib.io>
 #include <string.h>
 #include <avr/io.h>
+#include <util/delay.h>
 #include <avr/interrupt.h>
 #include <avr/wdt.h>
 #include "LTC_defs.h"
 #include "can_api.h"
 
-#include "bms.h"
+#include "BMSMaster.h"
 #include "ltc6811_api.c"
 #include "ltc6804_api.c"
 #include "spi_api.c"
@@ -43,9 +43,6 @@ const uint16_t UV_THRESHOLD = 22000;
 /* Thermistor Voltage */
 const uint16_t THERM_VOLTAGE_FRACTION = 3807 //TODO change -->
 
-/* Register Configuration for Communication with LTC6804 */
-uint8_t tx_cfg[TOTAL_IC][6];
-uint8_t rx_cfg[TOTAL_IC][6];
 
 
 
@@ -86,7 +83,7 @@ ISR(CAN_INT_vect) {
 
         //Setup to Receive Again
         CANSTMOB = 0x00;
-        CAN_wait_on_receive(0, CAN_ID_AIR_CONTROL);  //TODO change!
+        CAN_wait_on_receive(0, CAN_ID_AIR_CONTROL, CAN_LEN_AIR_CONTROL, 0xFF);  //TODO change!
     }
 
     //Check for BMS open Relay      TODO figure out
@@ -100,7 +97,7 @@ ISR(CAN_INT_vect) {
 
         //Setup to Receive Again
         CANSTMOB = 0x00;
-        CAN_wait_on_receive(4, CAN_ID_AIR_CONTROL);     //TODO change!
+        CAN_wait_on_receive(4, CAN_ID_AIR_CONTROL, CAN_LEN_AIR_CONTROL, 0xFF);     //TODO change!
     }
 }
 
@@ -123,7 +120,7 @@ ISR(TIMER0_COMPA_vect) {
 
 
 /*----- Timers -----*/
-void init_read_timer(void) {    //TODO not sure about logic
+void init_read_timer(void) {
     TCCR0A &= ~(_BV(WGM11) | _BV(WGM10));   // Set timer in CTC mode with reset on match with OCR1A
     TCCR0B &= ~(_BV(CS11));
     TCCR0B |= _BV(CS10);
@@ -134,12 +131,12 @@ void init_read_timer(void) {    //TODO not sure about logic
 }
 
 void init_fan_pwm(uint8_t duty_cycle) {     //TODO change compare pins
-    //Output compare pin is TODO, so we need OCR1B TODO as our counter
-    TCCR1B |= _BV(CS00);    // Clock prescale set to max speed
+    //Output compare pin is OC1B, so we need OCR1B as our counter
+    TCCR1B |= _BV(CS00);                    // Clock prescale set to max speed
     TCCR1B |= _BV(WGM12);
     TCCR1A |= _BV(COM1B1) | _BV(WGM10);     // Fast PWM 8-bit mode
-    TCCR1A &= ~_BV(COM1B0);     // Set on match, clear on top
-    DDRC |= _BV(FAN_PIN);       // Enable fan pin
+    TCCR1A &= ~_BV(COM1B0);                 // Set on match, clear on top
+    DDRC   |= _BV(FAN_PIN);                 // Enable fan pin
 
     OCR1B = (uint8_t)(duty_cycle);
 }
@@ -374,8 +371,8 @@ int main(void){
 
     // CAN Initialization
     CAN_init(CAN_ENABLED);
-    CAN_wait_on_receive(0, CAN_ID_AIR_CONTROL);
-    CAN_wait_on_receive(4, CAN_ID_BMS_DISCHARGE);
+    CAN_wait_on_receive(0, CAN_ID_AIR_CONTROL, CAN_LEN_AIR_CONTROL, 0xFF);
+    CAN_wait_on_receive(4, CAN_ID_BMS_DISCHARGE, CAN_LEN_BMS_DISCHARGE, 0xFF);
 
     // Initialization Timer
     init_read_timer();

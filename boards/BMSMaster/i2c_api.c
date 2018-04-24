@@ -176,7 +176,7 @@ int8_t rdcomm(uint8_t total_ic, //Number of ICs in the system
     uint16_t data_pec;
     uint16_t received_pec;
 
-    rx_data = (unit8_t *)malloc((8 * total_ic) * sizeof(uint8_t));
+    rx_data = (uint8_t *) malloc((8 * total_ic)*sizeof(uint8_t));
 
     cmd[0] = 0x07;
     cmd[1] = 0x22;

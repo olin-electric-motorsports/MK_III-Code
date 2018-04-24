@@ -1,3 +1,12 @@
+#include <stdio.h>
+#include <string.h>
+#include <avr/io.h>
+#include <util/delay.h>
+#include <avr/interrupt.h>
+#include <avr/wdt.h>
+
+
+
 /*----- Macro Definitions -----*/
 #define IMD_SENSE_PIN           PC7 //TODO change-->
 #define IMD_SENSE_PORT          PORTC
@@ -33,7 +42,7 @@
 /* I/O */
 #define RELAY_PIN               PB2 //TODO change -->
 #define RELAY_PORT              PORTB
-#define FAN_PIN                 PC1 //TODO change -->
+#define FAN_PIN                 PC1
 #define FAN_PORT                PORTC
 
 /* MUX defs */
@@ -84,3 +93,8 @@ void disable_discharge(uint8_t ic, uint8_t cell);
 /*----- Multiplexer Helper Functions -----*/
 void set_mux_channel(uint8_t total_ic, uint8_t i2c_address, uint8_t channel);
 void mux_disable(uint8_t total_ic, uint8_t i2c_address);
+
+
+/* Register Configuration for Communication with LTC6804 */
+uint8_t tx_cfg[TOTAL_IC][6];
+uint8_t rx_cfg[TOTAL_IC][6];
