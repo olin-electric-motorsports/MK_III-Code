@@ -7,7 +7,7 @@ Author:
 
 /*----- Includes -----*/
 #include <stdio.h>
-#include <stdlib.io>
+#include <stdlib.h>
 #include <string.h>
 #include <avr/io.h>
 #include <avr/interrupt.h>
