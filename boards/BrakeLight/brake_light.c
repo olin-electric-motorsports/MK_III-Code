@@ -9,10 +9,12 @@ Author:
 
 /*----- Includes -----*/
 #include <stdio.h>
-#include <stdlib.io>
+#include <stdlib.h>
 #include <string.h>
 #include <avr/io.h>
 #include <avr/interrupt.h>
+#include "can_api.h"
+// #include "brake_light_32.c"
 
 /*----- Macro Definitions -----*/
 /* Brake */
@@ -53,7 +55,6 @@ Author:
 #define BROADCAST_MOb       0
 
 
-
 /* Sense LEDs */
 // Might be irrelevant because the gStatusBar
 #define EXT_LED_GREEN           PD0 //(Debug LED on RJ45)
@@ -85,15 +86,15 @@ Author:
 /*----- Global Variables -----*/
 volatile uint8_t gFlag = 0x01;          // Global Flag
 volatile uint8_t gTimerFlag = 0x01;     // Timer flag
-unit8_t gCANMessage[8] = {0, 0, 0, 0, 0, 0, 0, 0};  // CAN Message
-unit8_t gPRECHARGE_TIMER = 0x00;
+uint8_t gCAN_MSG[8] = {0, 0, 0, 0, 0, 0, 0, 0};  // CAN Message
+uint8_t gPRECHARGE_TIMER = 0x00;
 
-volatile unit8_t gTSMS = 0x00;
-volatile unit8_t gTSMS_OLD = 0x00;  // Used for comparison
+volatile uint8_t gTSMS = 0x00;
+volatile uint8_t gTSMS_OLD = 0x00;  // Used for comparison
 
 // Timer counters
-unit8_t clock_prescale = 0x00;  // Used for update timer
-unit8_t brake_timer = 0x00;     // Used for brake timer
+uint8_t clock_prescale = 0x00;  // Used for update timer
+uint8_t brake_timer = 0x00;     // Used for brake timer
 
 // Brake POS mapping Values
 uint8_t brake_HIGH = 0xE7;       //TODO change with actual values
@@ -148,7 +149,7 @@ ISR(PCINT0_vect) {
     } else {
         gFlag &= ~_BV(STATUS_TSMS);
     }
-    if(PORT_BRAKE, PIN_BRAKE) {
+    if(PORT_BRAKE, BRAKE_PIN) {
         gFlag |= _BV(STATUS_BRAKE);
     } else {
         gFlag &= ~_BV(STATUS_BRAKE);
@@ -263,7 +264,7 @@ int main(void){
     sei();                              // Enable interrupts
 
     /* Setup interrupt registers */
-    PCICR |= _BV(PCIE0) | _BV(PCI2);
+    PCICR |= _BV(PCIE0) | _BV(PCIE2);
     PCMSK0 |= _BV(PCINT0) | _BV(PCINT1) | _BV(PCINT2) | _BV(PCINT5);      // Covers Pins: Main Fuse, Left E-Stop, TSMS, & Brake Light
     PCMSK2 |= _BV(PCINT21) | _BV(PCINT22) | _BV(PCINT23);   // Covers Pins: Right E-Stop, BSPD, and HVD
 
@@ -285,6 +286,9 @@ int main(void){
             // Send CAN message
             CAN_transmit(BROADCAST_MOb, CAN_ID_BRAKE_LIGHT,
                 CAN_LEN_BRAKE_LIGHT, gCAN_MSG);
+
+            // send_LED_bar();
+
         }
     }
 }
