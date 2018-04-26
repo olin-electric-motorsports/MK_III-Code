@@ -65,6 +65,7 @@ Author:
 #define FLAG_ESTOP              4
 #define FLAG_BOTS               5
 #define FLAG_THROTTLE_10        6
+#define FLAG_PANIC              7
 
 /* MOBs */
 // Mesage OBjects, or mailboxes?
@@ -72,16 +73,20 @@ Author:
 #define MOB_AIR_CONTROL         1
 #define MOB_DASHBOARD           2
 
+#define MOB_BROADCAST           0
+#define MOB_MOTOR_CONTROLLER    1
+
 #define UPDATE_STATUS   0
 
 //TODO
 /*ATmega must:
 -Sense 3 shutdown Lines (check)
--Read and send steering pot value
+-Read and send steering pot value (check)
 -Read both throttle pots (check)
 -Map out both throttle pots
--Send out throttle value over CAN
+-Send out throttle value over CAN (check)
 -Wait on RTD and trigger it (check ish...)
+RULES IC 1.13 pg87 of 2017-2018 FSAE rulebook
 */
 
 /*----- Global Variables -----*/
@@ -89,12 +94,26 @@ volatile uint8_t gFlag = 0x00;  // Global Flag
 volatile uint8_t gTimerFlag = 0x01; // Timer Flag
 
 uint8_t gThrottle[2] = {0x00,0x00};
-uint8_t gThrottle_smoothed = 0x00;
-uint8_t gThrottleThreshold = 0x66;//A6;
+uint8_t gthrottlesmoothed = 0x00;
+uint8_t gThrottleThreshold = 0xA6;// used for troubleshooting
 uint8_t gSteering = 0x00;
-uint8_t gSteeringThreshold = 0x7F;
+uint8_t gSteeringThreshold = 0x7F;// used for troubleshooting
 
-uint8_t gCANMessage[8] = {0, 0, 0, 0, 0, 0, 0, 0};  // CAN Message
+// CAN Message
+uint8_t gCANMessage[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+// CAN Message for motor controller
+uint8_t gCANMotorController[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+
+// Throttle mapping values
+// NEEDS TO BE SET ACCORDING TO READ VALUES
+uint8_t throttle1_HIGH = 0x00;
+uint8_t throttle1_LOW = 0x00;
+uint8_t throttle2_HIGH = 0x00;
+uint8_t throttle2_LOW = 0x00;
+
+uint8_t THROTTLE_MAX_ADJUST_AMOUNT = 0x00;
+
+uint8_t throttle_10_count = 0x00;
 
 /*----- Timer Counters ----- */
 uint8_t clock_prescale = 0x00;
@@ -263,8 +282,24 @@ void updateStateFromFlags(void) {
     Based off the state of the flag(s), update components and send CAN
     */
 
-}
+    //Based off of ready to drive sound rules (pg113)
+    if(bit_is_set(gFlag,FLAG_MOTOR_ON)){
+        RTD_PORT |= _BV(RTD_LD);
+        _delay_ms(2000);
+        RTD_PORT &= ~(_BV(RTD_LD));
+    } else {
+        RTD_PORT &= ~_BV(RTD_LD);
+    }
 
+    if(bit_is_set(gFlag,FLAG_PANIC)){
+        gThrottle[0] = 0x00;
+        gThrottle[1] = 0x00;
+        //DO MORE
+    }
+
+
+
+}
 
 void testInputs(int test) {
     /* For troubleshooting sensors
@@ -381,8 +416,6 @@ void readPots(void) {
         gFlag |= _BV(FLAG_THROTTLE_10);
     }
 
-
-
     gThrottle[0] = throttle1;
     gThrottle[1] = throttle2;
     gSteering = steering;
@@ -390,10 +423,136 @@ void readPots(void) {
 
 }
 
+void mapAndStoreThrottle(void){
+    uint8_t throttle1 = gThrottle[0];
+    uint8_t throttle2 = gThrottle[1];
+
+    if (throttle1 > throttle1_HIGH) {
+        if (throttle1 > (throttle1_HIGH + THROTTLE_MAX_ADJUST_AMOUNT)) {
+            gFlag |= _BV(FLAG_PANIC);
+            return;
+        }
+        throttle1 = throttle1_HIGH;
+    }
+
+    if (throttle2 > throttle2_HIGH) {
+        if (throttle2 > (throttle2_HIGH + THROTTLE_MAX_ADJUST_AMOUNT)) {
+            gFlag |= _BV(FLAG_PANIC);
+            return;
+        }
+        throttle2 = throttle2_HIGH;
+    }
+
+    // Map both to 0x00-0xFF range
+    uint8_t throttle1_mapped = ((throttle1 - throttle1_LOW) * 0xFF) / (throttle1_HIGH - throttle1_LOW);
+    uint8_t throttle2_mapped = ((throttle2 - throttle2_LOW) * 0xFF) / (throttle2_HIGH - throttle2_LOW);
+
+    // Rolling average
+    static uint8_t rolling1[32];
+    static uint8_t rolling2[32];
+
+    for (int i=0; i < 31; i++) {
+        rolling1[i] = rolling1[i+1];
+        rolling2[i] = rolling2[i+1];
+    }
+    rolling1[31] = throttle1_mapped;
+    rolling2[31] = throttle2_mapped;
+
+    uint16_t avg1 = 0;
+    uint16_t avg2 = 0;
+    for (int i=0; i < 32; i++) {
+        avg1 += rolling1[i];
+        avg2 += rolling2[i];
+    }
+
+    throttle1_mapped = avg1 >> 5;
+    throttle2_mapped = avg2 >> 5;
+
+    // Check if they are within 10%
+    uint8_t err = 0;
+    if (throttle1_mapped > throttle2_mapped && (throttle1_mapped - throttle2_mapped) >= (0xFF/10)) {
+        err = 1;
+        throttle_10_count++;
+        gFlag |= _BV(FLAG_THROTTLE_10);
+    }
+    else if (throttle2_mapped > throttle1_mapped && (throttle2_mapped - throttle1_mapped) >= (0xFF/10)) {
+        err = 1;
+        throttle_10_count++;
+        gFlag |= _BV(FLAG_THROTTLE_10);
+    }
+
+    // Oops we got an error
+    if (err) {
+        gFlag |= _BV(FLAG_PANIC);
+        return;
+    }
+
+    // if (throttle1_mapped < 38 || throttle2_mapped < 38) {
+    //     gFlag &= ~_BV(FLAG_THROTTLE_BRAKE);
+    // }
+
+    if (bit_is_clear(gFlag, FLAG_BRAKE) && bit_is_clear(gFlag, FLAG_THROTTLE_BRAKE)) {
+        gThrottle[0] = throttle1_mapped;
+        gThrottle[1] = throttle2_mapped;
+        //gThrottle[0] = throttle1;
+        //gThrottle[1] = throttle2;
+
+        //gFilter_reg = gFilter_reg - (gFilter_reg >> 2) + gThrottle[0];
+        //gthrottlesmoothed = gFilter_reg >> 2;
+    } else {
+        gThrottle[0] = 0x00;
+        gThrottle[1] = 0x00;
+        //gthrottlesmoothed = 0x00;
+        gFlag |= _BV(FLAG_THROTTLE_BRAKE);
+    }
+
+
+
+}
+
+void sendCanMessages(void){
+
+    if(bit_is_set(gFlag,FLAG_PANIC)) {
+        return;
+    }
+
+    gCANMessage[0] = gthrottlesmoothed;
+    gCANMessage[1] = gSteering;
+    gCANMessage[2] = bit_is_set(gFlag,FLAG_BOTS) ? 0xFF : 0x00;
+    gCANMessage[3] = bit_is_set(gFlag,FLAG_INERTIA) ? 0xFF : 0x00;
+    gCANMessage[4] = bit_is_set(gFlag,FLAG_ESTOP) ? 0xFF : 0x00;
+
+    CAN_transmit(MOB_BROADCAST,
+                 CAB_ID_THROTTLE,
+                 CAN_LEN_THROTTLE,
+                 gCANMessage);
+
+    // Send out Motor controller info
+    // REMAP
+    uint16_t thrott = (uint16_t) gThrottle[0];
+    //uint16_t thrott = (uint16_t) gthrottlesmoothed;
+    uint16_t mc_remap = (uint16_t)(thrott * 9);
+    gCANMotorController[0] = mc_remap;
+    gCANMotorController[1] = mc_remap >> 8;
+    gCANMotorController[2] = 0x00;
+    gCANMotorController[3] = 0x00;
+    gCANMotorController[4] = 1;
+    gCANMotorController[5] = bit_is_set(gFlag,FLAG_MOTOR_ON) ? 0x01 : 0x00;
+    gCANMotorController[6] = 0x00;
+    gCANMotorController[7] = 0x00;
+
+    CAN_transmit(MOB_MOTOR_CONTROLLER,
+                 CAN_ID_MC,
+                 CAN_LEN_MC,
+                 gCANMotorController);
+
+}
+
+
 /*----- MAIN -----*/
 int main(void){
     /*
-    -Set up I/O
+    -Set up I/O (done)
     -Set up CAN timer (done)
     -Initialize external libraries (if applicable)
     -Wait on CAN
@@ -421,11 +580,18 @@ int main(void){
     _delay_ms(400);
     RTD_PORT &= ~(_BV(RTD_LD));
 
-
     while(1){
-        checkShutdownState();
-        readPots();
-        testInputs(1);
-    }
+        if(bit_is_set(gTimerFlag,UPDATE_STATUS)){
+            EXT_LED_PORT ^= _BV(EXT_LED1);
+            gTimerFlag &= ~_BV(UPDATE_STATUS);
 
+            checkShutdownState();
+            readPots();
+            mapAndStoreThrottle();
+
+            testInputs(1);
+
+            sendCanMessages();
+        }
+    }
 }
