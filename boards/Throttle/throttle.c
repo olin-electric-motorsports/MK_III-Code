@@ -74,18 +74,21 @@ Author:
 #define MOB_DASHBOARD           2
 
 #define MOB_BROADCAST           0
-#define MOB_MOTOR_CONTROLLER    1
+#define MOB_MOTORCONTROLLER     1
 
-#define UPDATE_STATUS   0
+// for gTimer
+#define UPDATE_STATUS           0
+#define IMPLAUSIBILITY_ERROR    1
 
 //TODO
 /*ATmega must:
 -Sense 3 shutdown Lines (check)
 -Read and send steering pot value (check)
 -Read both throttle pots (check)
--Map out both throttle pots
+-Map out both throttle pots (check)
 -Send out throttle value over CAN (check)
--Wait on RTD and trigger it (check ish...)
+-Wait on RTD and trigger it (check ish..)
+    -I used a pause for that, update state from flags function
 RULES IC 1.13 pg87 of 2017-2018 FSAE rulebook
 */
 
@@ -94,7 +97,7 @@ volatile uint8_t gFlag = 0x00;  // Global Flag
 volatile uint8_t gTimerFlag = 0x01; // Timer Flag
 
 uint8_t gThrottle[2] = {0x00,0x00};
-uint8_t gthrottlesmoothed = 0x00;
+uint8_t gThrottleSmoothed = 0x00;
 uint8_t gThrottleThreshold = 0xA6;// used for troubleshooting
 uint8_t gSteering = 0x00;
 uint8_t gSteeringThreshold = 0x7F;// used for troubleshooting
@@ -118,6 +121,7 @@ uint8_t throttle_10_count = 0x00;
 /*----- Timer Counters ----- */
 uint8_t clock_prescale = 0x00;
 uint8_t timer_counter = 0x00;
+uint8_t imp_error = 0x00;
 
 
 /*----- Interrupt(s) -----*/
@@ -227,8 +231,18 @@ ISR(TIMER0_COMPA_vect) {
     }
     clock_prescale ++;
 
-}
+    if(bit_is_set(gFlag,FLAG_THROTTLE_10)){
+        imp_error++;
+        // 4Mgz *.1 = 400,000 cycles 
+        if(imp_error > 400000){
+            gFlag |= _BV(FLAG_PANIC);
+        }
+    } else {
+        imp_error = 0;
+    }
 
+
+}
 
 /*----- Functions -----*/
 void initTimer(void) {
@@ -460,6 +474,7 @@ void mapAndStoreThrottle(void){
 
     uint16_t avg1 = 0;
     uint16_t avg2 = 0;
+
     for (int i=0; i < 32; i++) {
         avg1 += rolling1[i];
         avg2 += rolling2[i];
@@ -479,6 +494,8 @@ void mapAndStoreThrottle(void){
         err = 1;
         throttle_10_count++;
         gFlag |= _BV(FLAG_THROTTLE_10);
+    } else {
+        gFlag &= ~_BV(FLAG_THROTTLE_10);
     }
 
     // Oops we got an error
@@ -487,23 +504,13 @@ void mapAndStoreThrottle(void){
         return;
     }
 
-    // if (throttle1_mapped < 38 || throttle2_mapped < 38) {
-    //     gFlag &= ~_BV(FLAG_THROTTLE_BRAKE);
-    // }
-
-    if (bit_is_clear(gFlag, FLAG_BRAKE) && bit_is_clear(gFlag, FLAG_THROTTLE_BRAKE)) {
+    if (bit_is_clear(gFlag, FLAG_BRAKE)) {
         gThrottle[0] = throttle1_mapped;
         gThrottle[1] = throttle2_mapped;
-        //gThrottle[0] = throttle1;
-        //gThrottle[1] = throttle2;
-
-        //gFilter_reg = gFilter_reg - (gFilter_reg >> 2) + gThrottle[0];
-        //gthrottlesmoothed = gFilter_reg >> 2;
     } else {
         gThrottle[0] = 0x00;
         gThrottle[1] = 0x00;
-        //gthrottlesmoothed = 0x00;
-        gFlag |= _BV(FLAG_THROTTLE_BRAKE);
+        // gFlag |= _BV(FLAG_THROTTLE_BRAKE);
     }
 
 
@@ -516,7 +523,7 @@ void sendCanMessages(void){
         return;
     }
 
-    gCANMessage[0] = gthrottlesmoothed;
+    gCANMessage[0] = gThrottle[0];
     gCANMessage[1] = gSteering;
     gCANMessage[2] = bit_is_set(gFlag,FLAG_BOTS) ? 0xFF : 0x00;
     gCANMessage[3] = bit_is_set(gFlag,FLAG_INERTIA) ? 0xFF : 0x00;
@@ -541,9 +548,9 @@ void sendCanMessages(void){
     gCANMotorController[6] = 0x00;
     gCANMotorController[7] = 0x00;
 
-    CAN_transmit(MOB_MOTOR_CONTROLLER,
-                 CAN_ID_MC,
-                 CAN_LEN_MC,
+    CAN_transmit(MOB_MOTORCONTROLLER,
+                 CAN_ID_MOTORCONTROLLER,
+                 CAN_LEN_MOTORCONTROLLER,
                  gCANMotorController);
 
 }
@@ -555,8 +562,8 @@ int main(void){
     -Set up I/O (done)
     -Set up CAN timer (done)
     -Initialize external libraries (if applicable)
-    -Wait on CAN
-    -Infinite loop checking shutdown state!
+    -Wait on CAN (hmm)
+    -Infinite loop checking shutdown state! (done)
     */
     initTimer();
     initADC();
@@ -576,6 +583,7 @@ int main(void){
     STEERING_PORT |= _BV(STEERING);
 
     // turn on RTD for .4 seconds
+    // just for wiring harness, not necessary
     RTD_PORT |= _BV(RTD_LD);
     _delay_ms(400);
     RTD_PORT &= ~(_BV(RTD_LD));
@@ -587,9 +595,9 @@ int main(void){
 
             checkShutdownState();
             readPots();
-            mapAndStoreThrottle();
-
             testInputs(1);
+            mapAndStoreThrottle();
+            updateStateFromFlags();
 
             sendCanMessages();
         }
