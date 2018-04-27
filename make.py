@@ -79,7 +79,7 @@ def make_elf(board, dir, libs, head):
     for item in c_files:
         includes = includes + str(item) + (' ')
     out = out + includes + LDFLAG + ' -o ' + board + '.elf'
-    # print(out)
+    print(out)
     outs = 'outs/'
     os.system(out)            #Write command to system
     cmd = 'mv *.elf outs/'
