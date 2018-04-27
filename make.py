@@ -22,7 +22,7 @@ PROGRAMMER = 'avrispmkII'
 PORT = 'usb'
 AVRDUDE = 'avrdude'
 OBJCOPY = 'avr-objcopy'
-MCU = 'atmega161'
+MCU = 'atmega16m1'
 PART = 'm16'
 F_CPU = '4000000UL'
 COMPILER = 'gnu99'
@@ -30,7 +30,8 @@ FUSE = '0x65'
 
 CFLAGS = '-Os -g -mmcu=' + MCU + ' -std=' + COMPILER + ' -Wall -Werror -ff'
 LDFLAG = '-mmcu=' + MCU + ' -lm -std=' + COMPILER
-AVRFLAGS = '-B5 -v -c' + PROGRAMMER + ' -p ' + MCU + '-P' + PORT
+# AVRFLAGS = '-B2 '  + ' -v -c ' + PROGRAMMER + ' -p ' + MCU + ' -P ' + PORT
+AVRFLAGS = '-B5 -v -c' + PROGRAMMER + ' -p ' + MCU + ' -P' + PORT
 
 possible_boards = []
 
