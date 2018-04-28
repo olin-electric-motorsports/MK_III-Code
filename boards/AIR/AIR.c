@@ -50,7 +50,7 @@ uint8_t clock_prescale = 0x00;  // Used for update timer
 /*----- Interrupt(s) -----*/
 // *pg 76 of datasheet*
 ISR(CAN_INT_vect) {
-    // Check first board (Brake Light)
+    // Check first board (Dashboard)
     CANPAGE = (0 << MOBNB0);
     if(bit_is_set(CANSTMOB, RXOK)) {
         volatile uint8_t msg = CANMSG;      //grab the first byte of the CAN message
