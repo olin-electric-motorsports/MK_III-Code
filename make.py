@@ -23,16 +23,16 @@ PORT = 'usb'
 AVRDUDE = 'avrdude'
 OBJCOPY = 'avr-objcopy'
 MCU = 'atmega16m1'
-PART = 'm16m1'
+PART = 'm16'
 F_CPU = '4000000UL'
 COMPILER = 'gnu99'
 FUSE = '0x65'
 
-CFLAGS = '-Os -g -mmcu=' + MCU + ' -std=' + COMPILER + ' -Wall -Werror -ff'
-LDFLAG = '-mmcu=' + MCU + ' -lm -std=' + COMPILER
-# AVRFLAGS = '-B2 '  + ' -v -c ' + PROGRAMMER + ' -p ' + MCU + ' -P ' + PORT
-# AVRFLAGS = '-B5 -v -c' + PROGRAMMER + ' -p ' + MCU + ' -P' + PORT
-AVRFLAGS = '-p -B2 ' + MCU + ' -v -c ' + PROGRAMMER + ' -p ' + PART
+
+
+CFLAGS = '-Os -g -mmcu=' + MCU + ' -std=' + COMPILER + ' -Wall -Werror '
+LDFLAG = '-mmcu=' + MCU + ' -lm -std=' + COMPILER + ' -DF_CPU=' + F_CPU
+AVRFLAGS = '-B5 -v -c' + PROGRAMMER + ' -p ' + MCU + ' -P ' + PORT
 
 possible_boards = []
 
@@ -80,8 +80,8 @@ def make_elf(board, dir, libs, head):
     includes = ''
     for item in c_files:
         includes = includes + str(item) + (' ')
-    out = out + includes + LDFLAG + ' -o ' + board + '.elf'
-    print(out)
+    out = out + includes + CFLAGS + LDFLAG + ' -o ' + board + '.elf'
+    # print(out)
     outs = 'outs/'
     os.system(out)            #Write command to system
     cmd = 'mv *.elf outs/'
