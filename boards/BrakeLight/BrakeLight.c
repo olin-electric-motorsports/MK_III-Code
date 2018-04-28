@@ -44,7 +44,7 @@ Author:
 
 /* CAN Positions */
 #define CAN_BRAKE           0
-#define CAN_BREAK_POS       1
+#define CAN_BRAKE_POS       1
 #define CAN_BSPD            2
 #define CAN_HVD             3
 #define CAN_TSMS            4
@@ -87,7 +87,6 @@ Author:
 volatile uint8_t gFlag = 0x01;          // Global Flag
 volatile uint8_t gTimerFlag = 0x01;     // Timer flag
 uint8_t gCAN_MSG[8] = {0, 0, 0, 0, 0, 0, 0, 0};  // CAN Message
-uint8_t gPRECHARGE_TIMER = 0x00;
 
 volatile uint8_t gTSMS = 0x00;
 volatile uint8_t gTSMS_OLD = 0x00;  // Used for comparison
@@ -248,7 +247,7 @@ static inline void mapBrakePos() {
         a byte for sending over CAN. In range [0x00, 0xFF] */
     uint8_t raw = ANALOG_BRAKE_PORT & ANALOG_BRAKE_PIN;
     uint8_t mapped = ((raw - brake_LOW) * 0xFF) / (brake_HIGH - brake_LOW);
-    gCAN_MSG[CAN_BREAK_POS] = mapped;
+    gCAN_MSG[CAN_BRAKE_POS] = mapped;
 }
 
 
@@ -258,8 +257,8 @@ int main(void){
     -Set up Interrupts
     -Set up CAN timer
     -While
-        -Every 20 timer cycles, send flag status
-        -Every 40 timer cycles, send brake position
+        -Every 20 timer cycles, send flag status (20 * 65.535 ms = 1.31 s )
+        -Every 40 timer cycles, send brake position (40 * 65.535 ms = 2.62 s)
     */
     sei();                              // Enable interrupts
 
