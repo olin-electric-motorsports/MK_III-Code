@@ -11,12 +11,12 @@ void LOG_init(void) {
     LINBRR = 0x0C;
 }
 
-void LOG_chr(uint8_t data) {
+void LOG_chr(char data) {
     loop_until_bit_is_clear(LINSIR, LBUSY);
     LINDAT = data;
 }
 
-void LOG_println(uint8_t *data, uint8_t data_len) {
+void LOG_println(char *data, uint8_t data_len) {
     // Send our data
     for (int i=0; i < data_len; i++) {
         loop_until_bit_is_clear(LINSIR, LBUSY);

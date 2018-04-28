@@ -26,7 +26,7 @@
 void LOG_init(void);
 
 /// Log a single character over UART
-void LOG_chr(uint8_t data);
+void LOG_chr(char data);
 
 /// Log a string of characters over UART. Note that you must pass the accurate length of characters.
-void LOG_println(uint8_t *data, uint8_t data_len);
+void LOG_println(char *data, uint8_t data_len);

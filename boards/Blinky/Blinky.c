@@ -1,18 +1,24 @@
+#include <string.h>
 #include <avr/io.h>
 #include <util/delay.h>
+#include "log_uart.h"
+
 
 int main (void) {
     // Set PB4 to output
     // Use pin 10 to light up an LED
-    DDRC |= _BV(PC6);
+    DDRB |= _BV(PB3);
+    LOG_init();
 
     while(1) {
         // Toggle PE1 (pin 10)
         // Toggles power to pin 10 to create a "blink"
-        PORTC ^= _BV(PC6);
+        PORTB ^= _BV(PB3);
 
+        char blink_msg[] = "*blink*";
+        LOG_println(blink_msg, strlen(blink_msg));
 
         // Give a delay to the toggle so it doesn't infinitely toggle
-        _delay_ms(1000);
+        _delay_ms(100);
     }
 }
