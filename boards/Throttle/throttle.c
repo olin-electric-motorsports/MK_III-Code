@@ -233,7 +233,7 @@ ISR(TIMER0_COMPA_vect) {
 
     if(bit_is_set(gFlag,FLAG_THROTTLE_10)){
         imp_error++;
-        // 4Mgz *.1 = 400,000 cycles 
+        // 4Mgz *.1 = 400,000 cycles
         if(imp_error > 400000){
             gFlag |= _BV(FLAG_PANIC);
         }
@@ -530,7 +530,7 @@ void sendCanMessages(void){
     gCANMessage[4] = bit_is_set(gFlag,FLAG_ESTOP) ? 0xFF : 0x00;
 
     CAN_transmit(MOB_BROADCAST,
-                 CAB_ID_THROTTLE,
+                 CAN_ID_THROTTLE,
                  CAN_LEN_THROTTLE,
                  gCANMessage);
 
