@@ -9,15 +9,19 @@
  * In the code, run `LOG_init()` in your setup code.
  * Run `LOG_println(...)` where you want to log stuff.
  *
- * Run `picocom -b 6250 /dev/ttyUSB0` (or something) to receive logged messages.
+ * Run `picocom /dev/ttyUSB0` (or something) to receive logged messages.
  *
  * # Example
  *
  * ```c
  *
  * LOG_init();
- * uint8_t init_success_msg[] = "init good!";
+ * char init_success_msg[] = "init good!";
  * LOG_println(init_success_msg, 10);
+ *
+ * char dynamic_msg[128] = "";
+ * sprintf(dynamic_msg, "Data is %d", data);
+ * LOG_println(dynamic_msg, strlen(dynamic_msg))
  *
  * ```
  */
