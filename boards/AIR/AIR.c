@@ -24,9 +24,9 @@ Author:
 #define EXT_LED_ORANGE              PB0
 #define PORT_EXT_LED_ORANGE         PORTB
 #define LED1_PIN                    PD0
-#define LED2_PIN                    PC0
+#define LED2_PIN                    PB1
 #define PORT_LED1                   PORTD
-#define PORT_LED2                   PORTC
+#define PORT_LED2                   PORTB
 
 
 // CAN Positions
@@ -42,6 +42,7 @@ Author:
 /*----- Global Variables -----*/
 volatile uint8_t gFlag = 0x00;  // Global Flag
 uint8_t gCAN_MSG[8] = {0, 0, 0, 0, 0, 0, 0, 0};  // CAN Message
+uint8_t can_recv_msg[8] = {};
 
 // Timer counters
 uint8_t clock_prescale = 0x00;  // Used for update timer
@@ -54,11 +55,13 @@ ISR(CAN_INT_vect) {
     CANPAGE = (0 << MOBNB0);
     if(bit_is_set(CANSTMOB, RXOK)) {
         volatile uint8_t msg = CANMSG;      //grab the first byte of the CAN message
-        uint8_t start_button = CANMSG;
+        can_recv_msg[0] = msg;
+        can_recv_msg[1] = CANMSG;
+        // uint8_t start_button = CANMSG;
         // can_recv_msg[0] = msg;
         // can_recv_msg[1] = 0x99;
 
-        if(start_button == 0xFF) {
+        if(can_recv_msg[1] == 0xFF) {
             gFlag |= SHUTDOWN_COMPLETE;           //trip flag
         } else {
             gFlag &= ~SHUTDOWN_COMPLETE;          //reset flag

@@ -19,6 +19,7 @@ import time
 
 CC = 'avr-gcc'
 PROGRAMMER = 'avrispmkII'
+# PROGRAMMER = 'dragon_isp'
 PORT = 'usb'
 AVRDUDE = 'avrdude'
 OBJCOPY = 'avr-objcopy'
@@ -32,7 +33,7 @@ FUSE = '0x65'
 
 CFLAGS = '-Os -g -mmcu=' + MCU + ' -std=' + COMPILER + ' -Wall -Werror '
 LDFLAG = '-mmcu=' + MCU + ' -lm -std=' + COMPILER + ' -DF_CPU=' + F_CPU
-AVRFLAGS = '-B2 -v -c' + PROGRAMMER + ' -p ' + MCU + ' -P ' + PORT
+AVRFLAGS = '-B5 -v -c' + PROGRAMMER + ' -p ' + MCU + ' -P ' + PORT
 
 possible_boards = []
 
@@ -81,7 +82,7 @@ def make_elf(board, dir, libs, head):
     for item in c_files:
         includes = includes + str(item) + (' ')
     out = out + includes + CFLAGS + LDFLAG + ' -o ' + board + '.elf'
-    # print(out)
+    print(out)
     outs = 'outs/'
     os.system(out)            #Write command to system
     cmd = 'mv *.elf outs/'
