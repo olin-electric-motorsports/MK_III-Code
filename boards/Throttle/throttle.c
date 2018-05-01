@@ -14,6 +14,7 @@ Author:
 #include <avr/interrupt.h>
 #include <util/delay.h>
 #include "can_api.h"
+#include "log_uart.h"
 
 /*----- Macro Definitions -----*/
 /* Shutdown */
@@ -157,22 +158,22 @@ ISR(CAN_INT_vect) {
     }
 
     // Air control unnesecary??
-    CANPAGE = (MOB_AIR_CONTROL << MOBNB0);
-    if (bit_is_set(CANSTMOB,RXOK)) {
-        volatile int8_t msg = CANMSG;
-
-        if(msg == 0xFF){
-            gFlag |= _BV(FLAG_AIRS);
-        } else {
-            gFlag &= ~_BV(FLAG_AIRS);
-        }
-
-        CANSTMOB = 0x00;
-        CAN_wait_on_receive(MOB_AIR_CONTROL,
-                            CAN_ID_AIR_CONTROL,
-                            CAN_LEN_AIR_CONTROL,
-                            CAN_IDM_single);
-    }
+    // CANPAGE = (MOB_AIR_CONTROL << MOBNB0);
+    // if (bit_is_set(CANSTMOB,RXOK)) {
+    //     volatile int8_t msg = CANMSG;
+    //
+    //     if(msg == 0xFF){
+    //         gFlag |= _BV(FLAG_AIRS);
+    //     } else {
+    //         gFlag &= ~_BV(FLAG_AIRS);
+    //     }
+    //
+    //     CANSTMOB = 0x00;
+    //     CAN_wait_on_receive(MOB_AIR_CONTROL,
+    //                         CAN_ID_AIR_CONTROL,
+    //                         CAN_LEN_AIR_CONTROL,
+    //                         CAN_IDM_single);
+    // }
 
     //Start button
     CANPAGE = (MOB_DASHBOARD << MOBNB0);
@@ -331,6 +332,14 @@ void testInputs(int test) {
     /*--- Set LED's on if > 50% ---*/
     /*--- Pull ups' on all three ---*/
     if(test == 1){
+        // LOG_chr(gThrottle[0]);
+        // LOG_chr(gThrottle[1]);
+        char disp_string[64];
+        // char static_msg1[] = "Throttle Left";
+        // char static_msg2[] = "Throttle Right";
+        // LOG_println(static_msg1,strlen(static_msg1))
+        sprintf(disp_string,"Throttle left is %d, Throttle right is %d",gThrottle[0],gThrottle[1]);
+        LOG_println(disp_string,strlen(disp_string));
 
         if(gThrottle[1] > gThrottleThreshold){
             LED2_PORT |= _BV(LED2);
@@ -418,14 +427,14 @@ void readPots(void) {
     loop_until_bit_is_clear(ADCSRA, ADSC);
     uint8_t steering = (uint8_t) (ADC >> 2);
 
-    uint8_t err = 0;
+    // uint8_t err = 0;
     if (throttle1 > throttle2 && (throttle1 - throttle2) <= (0xFF/10)) {
-        err = 1;
+        // err = 1;
         // throttle_10_count++;
         gFlag |= _BV(FLAG_THROTTLE_10);
     }
     else if (throttle2 > throttle1 && (throttle2 - throttle1) <= (0xFF/10)) {
-        err = 1;
+        // err = 1;
         // throttle_10_count++;
         gFlag |= _BV(FLAG_THROTTLE_10);
     }
@@ -517,7 +526,7 @@ void mapAndStoreThrottle(void){
 
 }
 
-void sendCanMessages(void){
+void sendCanMessages(int viewCan){
 
     if(bit_is_set(gFlag,FLAG_PANIC)) {
         return;
@@ -552,6 +561,20 @@ void sendCanMessages(void){
                  CAN_ID_MOTORCONTROLLER,
                  CAN_LEN_MOTORCONTROLLER,
                  gCANMotorController);
+    if(viewCan){
+        //TODO
+        //sprintf both messages
+        char msg1[128];
+        char msg2[128];
+        sprintf(msg1,"CAN message one to all:\nThrottle:%d\nSteering:%d\nBOTS:%d\nInertia:%d\nEstop:%d",
+        gCANMessage[0],gCANMessage[1],gCANMessage[2],gCANMessage[3],gCANMessage[4]);
+        LOG_println(msg1,strlen(msg1));
+        sprintf(msg2,"CAN message to motorcontroller:\n%d\n%d\n%d\n%d\n%d\n%d\n%d\n%d",
+        gCANMotorController[0],gCANMotorController[1],gCANMotorController[2],gCANMotorController[3],
+        gCANMotorController[4],gCANMotorController[5],gCANMotorController[6],gCANMotorController[7]);
+        LOG_println(msg2,strlen(msg2));
+
+    }
 
 }
 
@@ -568,6 +591,7 @@ int main(void){
     initTimer();
     initADC();
     sei();
+    LOG_init();
 
     // Set interrupt registers
     PCICR |= _BV(PCIE0);
@@ -582,11 +606,23 @@ int main(void){
     // set pull up resistor for steering
     STEERING_PORT |= _BV(STEERING);
 
-    // turn on RTD for .4 seconds
-    // just for wiring harness, not necessary
-    RTD_PORT |= _BV(RTD_LD);
-    _delay_ms(400);
-    RTD_PORT &= ~(_BV(RTD_LD));
+    // Commenting this out because it's awful - Hoppe 4/28/18
+    // // turn on RTD for .4 seconds
+    // // just for wiring harness, not necessary
+    // RTD_PORT |= _BV(RTD_LD);
+    // _delay_ms(400);
+    // RTD_PORT &= ~(_BV(RTD_LD));
+    CAN_wait_on_receive(MOB_DASHBOARD,
+                        CAN_ID_DASHBOARD,
+                        CAN_LEN_DASHBOARD,
+                        CAN_IDM_single);
+
+    CAN_wait_on_receive(MOB_BRAKELIGHT,
+                        CAN_ID_BRAKE_LIGHT,
+                        CAN_LEN_BRAKE_LIGHT,
+                        CAN_IDM_single);
+
+
 
     while(1){
         if(bit_is_set(gTimerFlag,UPDATE_STATUS)){
@@ -595,11 +631,11 @@ int main(void){
 
             checkShutdownState();
             readPots();
-            testInputs(1);
+            testInputs(2);
             mapAndStoreThrottle();
             updateStateFromFlags();
 
-            sendCanMessages();
+            sendCanMessages(1);
         }
     }
 }
