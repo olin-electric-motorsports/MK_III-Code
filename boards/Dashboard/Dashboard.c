@@ -85,9 +85,8 @@ ISR(CAN_INT_vect) {
 
         //Setup to Receive Again
         CANSTMOB = 0x00;
-        CAN_wait_on_receive(0, CAN_ID_AIR_CONTROL, CAN_LEN_AIR_CONTROL, 0xFF);
+        CAN_wait_on_receive(0, CAN_ID_BRAKE_LIGHT, CAN_LEN_BRAKE_LIGHT, 0xFF);
     }
-
 }
 
 ISR(PCINT0_vect) {
