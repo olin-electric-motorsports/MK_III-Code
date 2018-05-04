@@ -22,7 +22,9 @@ Author:
 /*----- Macro Definitions -----*/
 // LEDs
 #define EXT_LED_ORANGE              PB5
+#define EXT_LED_GREEN               PB4
 #define PORT_EXT_LED_ORANGE         PORTB
+#define PORT_EXT_LED_GREEN          PORTB
 #define LED1_PIN                    PB6
 #define PORT_LED1                   PORTB
 
@@ -47,9 +49,10 @@ Author:
 /*----- Global Variables -----*/
 volatile uint8_t gFlag = 0x00;  // Global Flag
 uint8_t gCAN_MSG[8] = {0, 0, 0, 0, 0, 0, 0, 0};  // CAN Message
+uint8_t can_recv_msg[8] = {};
 
 // Timer counters
-uint8_t clock_prescale = 0x00;  // Used for update timer
+uint8_t gClock_prescale = 0x00;  // Used for update timer
 
 
 
@@ -59,25 +62,25 @@ ISR(CAN_INT_vect) {
     // Check first board (Brake Light)
     CANPAGE = (0 << MOBNB0);
     if(bit_is_set(CANSTMOB, RXOK)) {
-        volatile uint8_t msg = CANMSG;      //grab the first byte of the CAN message
-        uint8_t brake = CANMSG;
-        uint8_t brake_pos = CANMSG;
-        uint8_t bspd = CANMSG;
-        uint8_t hvd = CANMSG;
-        uint8_t tsms = CANMSG;
-        uint8_t left_e_stop = CANMSG;
-        uint8_t right_e_stop = CANMSG;
-        uint8_t main_fuse = CANMSG;
+        can_recv_msg[0] = CANMSG;   // brake
+        can_recv_msg[1] = CANMSG;   // brake_pos
+        can_recv_msg[2] = CANMSG;   // bspd
+        can_recv_msg[3] = CANMSG;   // hvd
+        can_recv_msg[4] = CANMSG;   // tsms
+        can_recv_msg[5] = CANMSG;   // left_e_stop
+        can_recv_msg[6] = CANMSG;   // right_e_stop
+        can_recv_msg[7] = CANMSG;   // main_fuse
+
         // can_recv_msg[0] = msg;
         // can_recv_msg[1] = 0x99;
 
-        if(brake == 0xFF) {
+        if(can_recv_msg[0] == 0xFF) {
             gFlag |= BRAKE_PRESSED;           //trip flag
         } else {
             gFlag &= ~BRAKE_PRESSED;          //reset flag
         }
 
-        if(tsms == 0xFF) {
+        if(can_recv_msg[4] == 0xFF) {
             gFlag |= TSMS_CLOSED;
         } else {
             gFlag &= ~TSMS_CLOSED;
@@ -103,11 +106,11 @@ ISR(PCINT0_vect) {
 
 ISR(TIMER0_COMPA_vect) {
     // Only send CAN msgs every 20 cycles
-    if(clock_prescale > 20) {
+    if(gClock_prescale > 20) {
         gFlag |= _BV(UPDATE_STATUS);
-        clock_prescale = 0;
+        gClock_prescale = 0;
     }
-    clock_prescale++;
+    gClock_prescale++;
 }
 
 
@@ -153,6 +156,9 @@ int main(void){
 
     sei();                  // Enable Interrupts
 
+    DDRB |= _BV(LED1_PIN) | _BV(EXT_LED_ORANGE);
+
+
     /* Setup interrupt registers */
     PCICR |= _BV(PCIE0);
     PCMSK0 |= _BV(PCINT2);
@@ -171,9 +177,14 @@ int main(void){
 
             // updateStateFromFlags();
 
+            gFlag &= ~_BV(UPDATE_STATUS);  // Clear Flag
+
             // if(bit_is_set(gFlag, BRAKE_PRESSED) && bit_is_set(gFlag, TSMS_CLOSED)) {
             //     CAN_transmit(0, CAN_ID_DASHBOARD, CAN_LEN_DASHBOARD, gCAN_MSG);
             // }
+            if(bit_is_set(gFlag, BRAKE_PRESSED)) {
+                PORT_EXT_LED_GREEN ^= _BV(EXT_LED_GREEN);
+            }
         }
 
         // Do continuously for now
