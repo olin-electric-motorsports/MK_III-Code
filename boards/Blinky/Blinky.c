@@ -13,11 +13,11 @@ int main (void) {
     while(1) {
         // Toggle PE1 (pin 10)
         // Toggles power to pin 10 to create a "blink"
-        PORTB ^= _BV(PB3);
+        PORTB ^= _BV(PC3);
         char blink_msg[] = "*blink*";
         LOG_println(blink_msg, strlen(blink_msg));
 
         // Give a delay to the toggle so it doesn't infinitely toggle
-        _delay_ms(100);
+        _delay_ms(1000);
     }
 }

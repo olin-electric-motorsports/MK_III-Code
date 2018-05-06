@@ -21,12 +21,12 @@ Author:
 
 /*----- Macro Definitions -----*/
 // LEDs
-#define EXT_LED_ORANGE              PB0
-#define PORT_EXT_LED_ORANGE         PORTB
-#define LED1_PIN                    PD0
-#define LED2_PIN                    PC0
-#define PORT_LED1                   PORTD
-#define PORT_LED2                   PORTC
+#define EXT_LED_ORANGE              PD0
+#define PORT_EXT_LED_ORANGE         PORTD
+#define LED1_PIN                    PB0
+#define LED2_PIN                    PB1
+#define PORT_LED1                   PORTB
+#define PORT_LED2                   PORTB
 
 
 // CAN Positions
@@ -40,11 +40,12 @@ Author:
 
 
 /*----- Global Variables -----*/
-volatile uint8_t gFlag = 0x00;  // Global Flag
+volatile uint8_t gFlag = 0x01;  // Global Flag
 uint8_t gCAN_MSG[8] = {0, 0, 0, 0, 0, 0, 0, 0};  // CAN Message
+uint8_t can_recv_msg[8] = {};
 
 // Timer counters
-uint8_t clock_prescale = 0x00;  // Used for update timer
+uint8_t gClock_prescale = 0x00;  // Used for update timer
 
 
 /*----- Interrupt(s) -----*/
@@ -54,11 +55,13 @@ ISR(CAN_INT_vect) {
     CANPAGE = (0 << MOBNB0);
     if(bit_is_set(CANSTMOB, RXOK)) {
         volatile uint8_t msg = CANMSG;      //grab the first byte of the CAN message
-        uint8_t start_button = CANMSG;
+        can_recv_msg[0] = msg;
+        can_recv_msg[1] = CANMSG;
+        // uint8_t start_button = CANMSG;
         // can_recv_msg[0] = msg;
         // can_recv_msg[1] = 0x99;
 
-        if(start_button == 0xFF) {
+        if(can_recv_msg[1] == 0xFF) {
             gFlag |= SHUTDOWN_COMPLETE;           //trip flag
         } else {
             gFlag &= ~SHUTDOWN_COMPLETE;          //reset flag
@@ -81,11 +84,11 @@ ISR(PCINT0_vect) {
 
 ISR(TIMER0_COMPA_vect) {
     // Only send CAN msgs every 20 cycles
-    if(clock_prescale > 20) {
+    if(gClock_prescale > 20) {
         gFlag |= _BV(UPDATE_STATUS);
-        clock_prescale = 0;
+        gClock_prescale = 0;
     }
-    clock_prescale++;
+    gClock_prescale++;
 }
 
 
@@ -131,12 +134,15 @@ int main(void){
 
     sei();                  // Enable Interrupts
 
+    DDRB |= _BV(LED2_PIN) | _BV(LED1_PIN);
+    DDRD |= _BV(EXT_LED_ORANGE);
 
     // CAN Enable
     CAN_init(CAN_ENABLED);
     CAN_wait_on_receive(0, CAN_ID_DASHBOARD, CAN_LEN_DASHBOARD, 0xFF);
 
     initTimer();
+    gFlag |= _BV(UPDATE_STATUS);        // Read ports
 
     while(1) {
         if(bit_is_set(gFlag, UPDATE_STATUS)) {
@@ -144,6 +150,7 @@ int main(void){
             PORT_LED1 ^= _BV(LED1_PIN);
 
             // updateStateFromFlags();
+            gFlag &= ~_BV(UPDATE_STATUS);  // Clear Flag
 
             // if(bit_is_set(gFlag, BRAKE_PRESSED) && bit_is_set(gFlag, TSMS_CLOSED)) {
             //     CAN_transmit(0, CAN_ID_DASHBOARD, CAN_LEN_DASHBOARD, gCAN_MSG);

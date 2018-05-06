@@ -263,6 +263,9 @@ int main(void){
     */
     sei();                              // Enable interrupts
 
+    DDRC |= _BV(LED1) | _BV(LED2) | _BV(EXT_LED_ORANGE);
+    DDRD |= _BV(EXT_LED_GREEN);
+
     /* Setup interrupt registers */
     PCICR |= _BV(PCIE0) | _BV(PCIE2);
     PCMSK0 |= _BV(PCINT0) | _BV(PCINT1) | _BV(PCINT2) | _BV(PCINT5);      // Covers Pins: Main Fuse, Left E-Stop, TSMS, & Brake Light
@@ -272,16 +275,17 @@ int main(void){
     gTimerFlag |= _BV(UPDATE_STATUS);        // Read ports
 
     while(1) {
+        // PORT_LED1 |= _BV(LED1);
         if(bit_is_set(gTimerFlag, UPDATE_STATUS)) {
-            PORT_EXT_LED_ORANGE ^= _BV(EXT_LED_ORANGE);     // Blink Orange LED for timing check
+            PORT_LED1 ^= _BV(LED1);     // Blink Orange LED for timing check
 
             updateStateFromFlags();     // Build CAN message based off flags
-            gTimerFlag &= ~_BV(UPDATE_STATUS);
+            gTimerFlag &= ~_BV(UPDATE_STATUS);  // Clear Flag
 
-            if(bit_is_set(gTimerFlag, SEND_BRAKE)) {
-                mapBrakePos();              // Add brake position to CAN message
-                gTimerFlag &= ~_BV(SEND_BRAKE);
-            }
+            // if(bit_is_set(gTimerFlag, SEND_BRAKE)) {
+            //     mapBrakePos();              // Add brake position to CAN message
+            //     gTimerFlag &= ~_BV(SEND_BRAKE);
+            // }
 
             // Send CAN message
             CAN_transmit(BROADCAST_MOb, CAN_ID_BRAKE_LIGHT,
