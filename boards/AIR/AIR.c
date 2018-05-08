@@ -40,7 +40,7 @@ Author:
 
 
 /*----- Global Variables -----*/
-volatile uint8_t gFlag = 0x01;  // Global Flag
+volatile uint8_t gFlag = 0x00;  // Global Flag
 uint8_t gCAN_MSG[8] = {0, 0, 0, 0, 0, 0, 0, 0};  // CAN Message
 uint8_t can_recv_msg[8] = {};
 
@@ -54,23 +54,40 @@ ISR(CAN_INT_vect) {
     // Check first board (Dashboard)
     CANPAGE = (0 << MOBNB0);
     if(bit_is_set(CANSTMOB, RXOK)) {
-        volatile uint8_t msg = CANMSG;      //grab the first byte of the CAN message
-        can_recv_msg[0] = msg;
-        can_recv_msg[1] = CANMSG;
+        can_recv_msg[0] = CANMSG;
         // uint8_t start_button = CANMSG;
         // can_recv_msg[0] = msg;
         // can_recv_msg[1] = 0x99;
 
-        if(can_recv_msg[1] == 0xFF) {
-            gFlag |= SHUTDOWN_COMPLETE;           //trip flag
+        if(can_recv_msg[0] == 0xFF) {
+            gFlag |= _BV(SHUTDOWN_COMPLETE);           //trip flag
         } else {
-            gFlag &= ~SHUTDOWN_COMPLETE;          //reset flag
+            gFlag &= ~_BV(SHUTDOWN_COMPLETE);          //reset flag
         }
 
 
         //Setup to Receive Again
         CANSTMOB = 0x00;
         CAN_wait_on_receive(0, CAN_ID_DASHBOARD, CAN_LEN_DASHBOARD, 0xFF);
+
+        // if(bit_is_set(CANSTMOB, RXOK)) {
+        //     // volatile uint8_t msg = CANMSG;      //grab the first byte of the CAN message
+        //     can_recv_msg[0] = CANMSG;
+        //     can_recv_msg[1] = CANMSG;
+        //     // uint8_t start_button = CANMSG;
+        //     // can_recv_msg[0] = msg;
+        //     // can_recv_msg[1] = 0x99;
+        //
+        //     if(can_recv_msg[1] == 0xFF) {
+        //         gFlag |= SHUTDOWN_COMPLETE;           //trip flag
+        //     } else {
+        //         gFlag &= ~SHUTDOWN_COMPLETE;          //reset flag
+        //     }
+        //
+        //
+        //     //Setup to Receive Again
+        //     CANSTMOB = 0x00;
+        //     CAN_wait_on_receive(0, CAN_ID_BRAKE_LIGHT, CAN_LEN_BRAKE_LIGHT, CAN_IDM_single);
     }
 
 }
@@ -113,6 +130,7 @@ void updateStateFromFlags(void) {
     Based off the state of the flag(s), update components and send CAN
     */
     if(bit_is_set(gFlag, SHUTDOWN_COMPLETE)) {
+        PORT_EXT_LED_ORANGE |= _BV(EXT_LED_ORANGE);
         gCAN_MSG[MAIN_TRACTIVE] = 0xFF;
     } else {
         gCAN_MSG[MAIN_TRACTIVE] = 0x00;
@@ -139,14 +157,14 @@ int main(void){
 
     // CAN Enable
     CAN_init(CAN_ENABLED);
-    CAN_wait_on_receive(0, CAN_ID_DASHBOARD, CAN_LEN_DASHBOARD, 0xFF);
+    CAN_wait_on_receive(0, CAN_ID_DASHBOARD, CAN_ID_DASHBOARD, CAN_IDM_single);
 
     initTimer();
     gFlag |= _BV(UPDATE_STATUS);        // Read ports
 
     while(1) {
         if(bit_is_set(gFlag, UPDATE_STATUS)) {
-            PORT_EXT_LED_ORANGE ^= _BV(EXT_LED_ORANGE);     // Blink Orange LED for timing check
+            // PORT_EXT_LED_ORANGE ^= _BV(EXT_LED_ORANGE);     // Blink Orange LED for timing check
             PORT_LED1 ^= _BV(LED1_PIN);
 
             // updateStateFromFlags();
@@ -155,14 +173,13 @@ int main(void){
             // if(bit_is_set(gFlag, BRAKE_PRESSED) && bit_is_set(gFlag, TSMS_CLOSED)) {
             //     CAN_transmit(0, CAN_ID_DASHBOARD, CAN_LEN_DASHBOARD, gCAN_MSG);
             // }
-        }
+            // Do continuously for now
+            updateStateFromFlags();
 
-        // Do continuously for now
-        updateStateFromFlags();
-
-        if(bit_is_set(gFlag, SHUTDOWN_COMPLETE)) {
-            PORT_LED2 ^= _BV(LED2_PIN);
-            CAN_transmit(0, CAN_ID_AIR_CONTROL, CAN_LEN_AIR_CONTROL, gCAN_MSG);
+            if(bit_is_set(gFlag, SHUTDOWN_COMPLETE)) {
+                PORT_LED2 ^= _BV(LED2_PIN);
+                CAN_transmit(0, CAN_ID_AIR_CONTROL, CAN_LEN_AIR_CONTROL, gCAN_MSG);
+            }
         }
     }
 }

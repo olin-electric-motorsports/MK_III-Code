@@ -4,8 +4,8 @@
 #include "can_api.h"
 
 
-#define PORT_LED        PORTC
-#define LED             PC5
+#define PORT_LED        PORTB
+#define LED             PB5
 
 volatile uint8_t gFlag = 0x00;          // Global Flag
 
@@ -16,7 +16,10 @@ ISR(CAN_INT_vect)
     uint8_t msg[CAN_ID_GLOBAL];
     CAN_read_received(0, CAN_ID_GLOBAL, msg);
 
-    gFlag |= _BV(0);
+    if(CANMSG == 0xB1) {
+        gFlag |= _BV(0);
+    }
+
 
     // Set the chip to wait for another message.
     CAN_wait_on_receive(0, CAN_ID_GLOBAL, CAN_LEN_GLOBAL, 0xFF);
@@ -25,7 +28,7 @@ ISR(CAN_INT_vect)
 
 int main (void)
 {
-    DDRC |= _BV(LED);
+    DDRB |= _BV(LED);
 
     sei();
 
