@@ -111,12 +111,12 @@ uint8_t gCANMotorController[8] = {0, 0, 0, 0, 0, 0, 0, 0};
 
 // Throttle mapping values
 // NEEDS TO BE SET ACCORDING TO READ VALUES
-uint16_t throttle1_HIGH = 165; //1020
-uint16_t throttle1_LOW = 0x00;
-uint16_t throttle2_HIGH = 170; //1020
-uint16_t throttle2_LOW = 0x00;
+uint16_t throttle1_HIGH = 160;
+uint16_t throttle1_LOW = 0x0c;
+uint16_t throttle2_HIGH = 165;
+uint16_t throttle2_LOW = 0x06;
 
-uint8_t THROTTLE_MAX_ADJUST_AMOUNT = 15;
+uint8_t THROTTLE_MAX_ADJUST_AMOUNT = 20;
 
 uint8_t throttle_10_count = 0x00;
 
@@ -439,26 +439,16 @@ void readPots(void) {
     // LED1_PORT ^= _BV(LED1);
 
 
-    // uint8_t err = 0;
-    if (throttle1 > throttle2 && (throttle1 - throttle2) <= (0xFF/10)) {
-        // err = 1;
-        // throttle_10_count++;
-        gFlag |= _BV(FLAG_THROTTLE_10);
-    }
-    else if (throttle2 > throttle1 && (throttle2 - throttle1) <= (0xFF/10)) {
-        // err = 1;
-        // throttle_10_count++;
-        gFlag |= _BV(FLAG_THROTTLE_10);
-    }
 
     gThrottle16[0] = throttle1;
     gThrottle16[1] = throttle2;
     gSteering = steering;
-
-
 }
 
-void mapAndStoreThrottle(void){
+void mapAndStoreThrottle(uint8_t rAvgNum){
+    //I've found that scale == 8 works pretty well
+    //scale sets the number of numbers to average for the throttle
+
     // we store a 10-bit value into a 32-bits so that the atmega can have enough room to
     // do the math necessary to accomodate for the amplification
     uint32_t throttle1 = gThrottle16[0];
@@ -468,40 +458,69 @@ void mapAndStoreThrottle(void){
     uint8_t throttle1_centered = throttle1 >> 2;
     uint8_t throttle2_centered = ((throttle2 * 100)/122) >> 2;
 
-    //TODO add an if statemenet for adjustment when reaching close to 170 for pots. - Corey 5/6/18
+    if(throttle1_centered > throttle1_HIGH && throttle1_centered < throttle1_HIGH + THROTTLE_MAX_ADJUST_AMOUNT){
+        throttle1_centered = throttle1_HIGH;
+    } else if(throttle1_centered  < throttle1_LOW){
+        throttle1_centered = throttle1_LOW;
+    }
+    if(throttle2_centered > throttle2_HIGH && throttle1_centered < throttle2_HIGH + THROTTLE_MAX_ADJUST_AMOUNT){
+        throttle2_centered = throttle2_HIGH;
+    } else if(throttle2_centered  < throttle2_LOW){
+        throttle2_centered = throttle2_LOW;
+    }
 
     uint8_t throttle1_mapped = ((throttle1_centered - throttle1_LOW) * 0xff) / (throttle1_HIGH-throttle1_LOW);
     uint8_t throttle2_mapped = ((throttle2_centered - throttle2_LOW) * 0xff) / (throttle2_HIGH-throttle2_LOW);
 
-    char disp_string3[64];
-    sprintf(disp_string3,"Throttle1 centered is %d, Throttle2 centered is %d",throttle1_centered,throttle2_centered);
-    LOG_println(disp_string3,strlen(disp_string3));
+    // char disp_string3[64];
+    // sprintf(disp_string3,"Throttle1 centered is %d, Throttle2 centered is %d",throttle1_centered,throttle2_centered);
+    // LOG_println(disp_string3,strlen(disp_string3));
 
     // char tmap[64];
     // sprintf(tmap,"Throttle left is %d, Throttle right is %d",throttle1_mapped,throttle2_mapped);
     // LOG_println(tmap,strlen(tmap));
 
     // Rolling average
-    static uint8_t rolling1[32];
-    static uint8_t rolling2[32];
+    #if(rAvgNum == 4)
+        uint8_t scale = 4;
+        uint8_t scale1 = 2;
+        static uint8_t rolling1[4];
+        static uint8_t rolling2[4];
+    #elif(rAvgNum == 8)
+        uint8_t scale = 8;
+        uint8_t scale1 = 3;
+        static uint8_t rolling1[8];
+        static uint8_t rolling2[8];
+    #elif(rAvgNum == 16)
+        uint8_t scale = 16;
+        uint8_t scale1 = 4;
+        static uint8_t rolling1[16];
+        static uint8_t rolling2[16];
+    #else
+        uint8_t scale = 32;
+        uint8_t scale1 = 5;
+        static uint8_t rolling1[32];
+        static uint8_t rolling2[32];
+    #endif
 
-    for (int i=0; i < 31; i++) {
+
+    for (int i=0; i < scale-1; i++) {
         rolling1[i] = rolling1[i+1];
         rolling2[i] = rolling2[i+1];
     }
-    rolling1[31] = throttle1_mapped;
-    rolling2[31] = throttle2_mapped;
+    rolling1[scale-1] = throttle1_mapped;
+    rolling2[scale-1] = throttle2_mapped;
 
     long long avg1 = 0;
     long long avg2 = 0;
 
-    for (int i=0; i < 32; i++) {
+    for (int i=0; i < scale; i++) {
         avg1 += rolling1[i];
         avg2 += rolling2[i];
     }
     // bit shift to the right since it's the same as dividing by 32 (2^5)
-    throttle1_mapped = avg1 >> 5;
-    throttle2_mapped = avg2 >> 5;
+    throttle1_mapped = avg1 >> scale1;
+    throttle2_mapped = avg2 >> scale1;
 
 
     char disp_string[64];
@@ -583,8 +602,6 @@ void sendCanMessages(int viewCan){
                  CAN_LEN_MOTORCONTROLLER,
                  gCANMotorController);
     if(viewCan){
-        //TODO
-        //sprintf both messages
         char msg1[128];
         char msg2[128];
         sprintf(msg1,"CAN message one to all:\nThrottle:%d\nSteering:%d\nBOTS:%d\nInertia:%d\nEstop:%d",
@@ -597,6 +614,8 @@ void sendCanMessages(int viewCan){
 
     }
 
+
+    EXT_LED_PORT ^= _BV(EXT_LED2);
 }
 
 
@@ -653,7 +672,7 @@ int main(void){
             checkShutdownState();
             readPots();
             testInputs(0);
-            mapAndStoreThrottle();
+            mapAndStoreThrottle(4);
             updateStateFromFlags();
 
             sendCanMessages(0);
