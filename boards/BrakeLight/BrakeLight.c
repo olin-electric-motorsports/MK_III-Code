@@ -237,8 +237,10 @@ static inline void updateStateFromFlags(void) {
 
     if(bit_is_set(gFlag, STATUS_BRAKE)) {
         gCAN_MSG[CAN_BRAKE] = 0xFF;
+        PORT_LED2 |= _BV(LED2);
     } else {
         gCAN_MSG[CAN_BRAKE] = 0x00;
+        PORT_LED2 &= ~_BV(LED2);
     }
 
 }
@@ -262,6 +264,7 @@ int main(void){
         -Every 40 timer cycles, send brake position
     */
     sei();                              // Enable interrupts
+    CAN_init(CAN_ENABLED);
 
     DDRC |= _BV(LED1) | _BV(LED2) | _BV(EXT_LED_ORANGE);
     DDRD |= _BV(EXT_LED_GREEN);

@@ -6,8 +6,8 @@
 #include <avr/interrupt.h>
 #include "can_api.h"
 
-#define PORT_LED        PORTB
-#define LED             PB5
+#define PORT_LED        PORTC
+#define LED             PC5
 #define UPDATE_STATUS   0
 
 volatile uint8_t gFlag = 0x01;          // Global Flag
@@ -45,9 +45,9 @@ int main (void) {
     gFlag |= _BV(UPDATE_STATUS);        // Read ports
 
     // Set the array msg to contain 3 bytes
-    uint8_t msg[CAN_LEN_GLOBAL] = { 0x11, 0x66, 0x0a };
+    uint8_t msg[CAN_LEN_GLOBAL] = { 0xC1, 0x66, 0x0a };
 
-    DDRB |= _BV(LED);
+    DDRC |= _BV(LED);
 
 
     initTimer_8bit();

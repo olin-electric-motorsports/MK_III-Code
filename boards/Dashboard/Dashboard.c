@@ -75,20 +75,20 @@ ISR(CAN_INT_vect) {
         // can_recv_msg[1] = 0x99;
 
         if(can_recv_msg[0] == 0xFF) {
-            gFlag |= BRAKE_PRESSED;           //trip flag
+            gFlag |= _BV(BRAKE_PRESSED);           //trip flag
         } else {
-            gFlag &= ~BRAKE_PRESSED;          //reset flag
+            gFlag &= ~_BV(BRAKE_PRESSED);          //reset flag
         }
 
-        if(can_recv_msg[4] == 0xFF) {
-            gFlag |= TSMS_CLOSED;
+        if(can_recv_msg[5] == 0xFF) {
+            gFlag |= _BV(TSMS_CLOSED);
         } else {
-            gFlag &= ~TSMS_CLOSED;
+            gFlag &= ~_BV(TSMS_CLOSED);
         }
 
         //Setup to Receive Again
         CANSTMOB = 0x00;
-        CAN_wait_on_receive(0, CAN_ID_BRAKE_LIGHT, CAN_LEN_BRAKE_LIGHT, 0xFF);
+        CAN_wait_on_receive(0, CAN_ID_BRAKE_LIGHT, CAN_LEN_BRAKE_LIGHT, CAN_IDM_single);
     }
 }
 
@@ -156,7 +156,7 @@ int main(void){
 
     sei();                  // Enable Interrupts
 
-    DDRB |= _BV(LED1_PIN) | _BV(EXT_LED_ORANGE);
+    DDRB |= _BV(LED1_PIN) | _BV(EXT_LED_ORANGE) | _BV(EXT_LED_GREEN);
 
 
     /* Setup interrupt registers */
@@ -166,9 +166,11 @@ int main(void){
 
     // CAN Enable
     CAN_init(CAN_ENABLED);
-    CAN_wait_on_receive(0, CAN_ID_BRAKE_LIGHT, CAN_LEN_BRAKE_LIGHT, 0xFF);
+    CAN_wait_on_receive(0, CAN_ID_BRAKE_LIGHT, CAN_LEN_BRAKE_LIGHT, CAN_IDM_single);
 
     initTimer();
+
+    gFlag |= _BV(UPDATE_STATUS);        // Read ports
 
     while(1) {
         if(bit_is_set(gFlag, UPDATE_STATUS)) {
@@ -177,14 +179,14 @@ int main(void){
 
             // updateStateFromFlags();
 
-            gFlag &= ~_BV(UPDATE_STATUS);  // Clear Flag
 
             // if(bit_is_set(gFlag, BRAKE_PRESSED) && bit_is_set(gFlag, TSMS_CLOSED)) {
             //     CAN_transmit(0, CAN_ID_DASHBOARD, CAN_LEN_DASHBOARD, gCAN_MSG);
             // }
-            if(bit_is_set(gFlag, BRAKE_PRESSED)) {
+            if(bit_is_set(gFlag, TSMS_CLOSED)) {
                 PORT_EXT_LED_GREEN ^= _BV(EXT_LED_GREEN);
             }
+            gFlag &= ~_BV(UPDATE_STATUS);  // Clear Flag
         }
 
         // Do continuously for now
