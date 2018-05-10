@@ -17,39 +17,28 @@ Author:
 
 /*----- Macro Definitions -----*/
 // Pin Definitions
-#define LED1		PB0		//TODO change
+#define LED1		PB0
 #define LED2		PB1
-#define PORT_LED1	PORTB
-#define PORT_LED2	PORTB
 
 // External LEDs
 #define EXT_LED1	PD0
 #define EXT_LED2	PC0
-#define	PORT_EXT_LED1	PORTD
-#define PORT_EXT_LED2	PORTC
 
 // Shutdown
 #define FINAL_SHUTDOWN_RELAY		PD7
 #define PIN_FINAL_SHUTDOWN_RELAY	PIND
 
 #define PIN_SenseBMS PD5
-#define PORT_SenseBMS PORTD
 #define PIN_SenseIMD PD6
-#define PORT_SenseIMD PORTD
 #define PIN_SenseConnToHVD PB2
-#define PORT_SenseConnToHVD PORTB
 #define PIN_SenseMainTSConn PD7
-#define PORT_SenseMainTSConn PORTD
 #define IMD_STATUS PD1
 #define BMS_STATUS PC1
 
 // Precharge & AIR
-#define PRECHARGE 	PC4//TODO
-#define PORT_PRECHARGE	PORTC//TODO
+#define PRECHARGE 	PC4
 #define PIN_AIR_LSD		PC5
-#define PORT_AIR_LSD	PORTC//
-#define AIR_Weld_Detect		PC6//TODO
-#define PORT_AIR_Weld_Detecct	PORTC//TODO
+#define AIR_Weld_Detect		PC6
 
 // CAN Message Objects
 #define GLOBAL_SHUTDOWN      0x0
@@ -100,9 +89,10 @@ void enableInterrupt(){
   // and PCINT17(IMD Status, PD1)
   PCMSK2 = (_BV(PCINT23) | _BV(PCINT22) | _BV(PCINT21);
   // Enable Pin Change Interrupts on PCINT9 (BMS_Staus, PC1)
-  PCMSK1 = _BV(PCINT9);
+  PCMSK1 |= _BV(PCINT9);
+
   // Enable Pin Change Interrupts on PCINT2 (PB2)
-  PCMSK0 = _BV(PCINT2);
+  PCMSK0 |= _BV(PCINT2);
 }
 
 
@@ -179,7 +169,6 @@ void timer0_setup(){
   TCCR0B |= _BV(CS01) | _BV(CS00);
 }
 
-
 unsigned long millis(){
   oldSREG = SREG;
   cli();
@@ -188,9 +177,7 @@ unsigned long millis(){
   return m;
 }
 
-
-
-inline void low_side_drive_precharge(){
+inline void low_side_drive_precharge(int charging_time){
   if (gFlag & _BV(Brake_Light)){
     if (!precharge_start_status){
       precharge_start_time = millis();
@@ -220,7 +207,7 @@ ISR(PCI2_vect){
   /*When Pin Change Interrupt 2 is triggered, check the status on
   BMS, IMD, and MainTSConn; check whether BMS are the same or
   different, if not send message*/
-  // TODO: to make sure the first two seconds of IMD is not read
+
   if(!IMD_status()){
      gCANMessage[IMD_Status] = 0x00;
      gFlag &= ~_BV(IMD_STATUS_FLAG)
@@ -384,20 +371,20 @@ ISR(CAN_INT_vect) {
 
 /*----- MAIN -----*/
 int main(void){
+  enableInterrupt();
+  timer0_setup();
   time = milis();
   checking_time = 0;
   precharge_start_status = 0;
-  DDRB |= _BV(LED1) | _BV(LED2); //Makes PB0 and PB1 as output
-  // DDRB &= ~(_BV(PIN_SenseConnToHVD)) //SET SenseConnToHVD as input
-  // DDRC |= _BV(PRECHARGE); //SET Precharge as output
-  // DDRC &= ~(_BV(AIR_Weld_Detect));
-  DDRD &= ~(_BV(PIN_SenseIMD)) & ~(_BV(PIN_SenseBMS)) & ~(_BV(PIN_SenseMainTSConn)); //
-  // uint8_t old_SenseBMS = PIND & _BV(PIN_SenseBMS);
-  uint8_t current_SenseBMS;
-  // uint8_t old_SenseIMD = PIND & _BV(PIN_SenseIMD);
-  uint8_t current_SenseIMD;
 
-  DDRC |= _BV(PC5) // Make PC5 as output
+
+  DDRB |= _BV(LED1) | _BV(LED2); //Makes PB0 and PB1 as output
+  DDRB &= ~(_BV(PIN_SenseConnToHVD));//SET SenseConnToHVD as input
+  DDRC |= _BV(PRECHARGE) | _BV(EXT_LED2) | _BV(PIN_AIR_LSD); //SET Precharge as output
+  DDRC &= ~(_BV(AIR_Weld_Detect)) | _BV(BMS_STATUS); //SET
+  DDRD |= _BV(EXT_LED1);
+  DDRD &= ~(_BV(PIN_SenseIMD)) & ~(_BV(PIN_SenseBMS)) & ~(_BV(PIN_SenseMainTSConn)) & ~(_BV(PD3)); //SET IMD, BMS, SenseMainTSConn as input
+
   while(1){
     // enable pin change interrupt for IMD after 2s delay
     if (!checking_time){
@@ -407,22 +394,13 @@ int main(void){
       }
     }
 
-    // low side drive precharge
-    low_side_drive_precharge()
+    AIR_minus_status();
 
-    //update BMS status
-    current_SenseBMS = (PIND & _BV(PIN_SenseBMS));
+    // low side drive precharge and AIR+
+    low_side_drive_precharge(10000);
 
+    low_side_drive_AIR_plus();
 
-    //update IMD status
-    current_SenseIMD = (PIND & _BV(PIN_SenseIMD));
-
-    // old_SenseBMS = current_SenseBMS;
-
-    if (PIND & _BV(PIN_SenseBMS)){
-      PORT_LED1 ^= _BV(LED1);
-      _delay_ms(100);
-    }
     if(bit_is_set(gFlag2, UPDATE_STATUS)){
       gFlag2 &= ~_BV(UPDATE_STATUS);
       CAN_transmit(MOB_BROADCAST,
