@@ -7,7 +7,7 @@ uint8_t CAN_init (uint8_t mode)
     CANGCON = _BV(SWRES);
 
     // CAN prescaler timing prescaler set to 0
-    CANTCON = 0x00;
+    CANTCON = 0x00; 
 
     // Set Error passive state
     CANGSTA |= _BV(ERRP);
@@ -31,7 +31,7 @@ uint8_t CAN_init (uint8_t mode)
 
     // enable interrupts on all MObs
     CANIE2 = ( _BV(IEMOB0) | _BV(IEMOB1) |
-               _BV(IEMOB2) | _BV(IEMOB3) |
+               _BV(IEMOB2) | _BV(IEMOB3) | 
                _BV(IEMOB4) | _BV(IEMOB5) );
 
 
@@ -89,7 +89,7 @@ uint8_t CAN_transmit (uint8_t mob, uint16_t ident, uint8_t msg_length, uint8_t m
 
     // Set mask to 0x00
     // Not used by Tx but good practice
-    CANIDM1 = 0x00;
+    CANIDM1 = 0x00; 
     CANIDM2 = 0x00;
     CANIDM3 = 0x00;
     CANIDM4 = 0x00;
@@ -99,7 +99,7 @@ uint8_t CAN_transmit (uint8_t mob, uint16_t ident, uint8_t msg_length, uint8_t m
     for(i=0; i < msg_length; i++){
         CANMSG = msg[i];
     }
-
+    
     // Send the message
     //CANCDMOB = _BV(CONMOB0) | (msg_length << DLC0);
     CANCDMOB = 0x00;
@@ -175,7 +175,7 @@ uint8_t CAN_read_received (uint8_t mob, uint8_t msg_length, uint8_t *msg)
 
     // Select MOb
     CANPAGE = (mob << MOBNB0);
-
+    
     // Check to see if RXOK flag is set
     if (bit_is_set(CANSTMOB, RXOK))
     {
@@ -192,11 +192,11 @@ uint8_t CAN_read_received (uint8_t mob, uint8_t msg_length, uint8_t *msg)
     if (bit_is_set(CANSTMOB, DLCW))
     {
         error_value = CAN_ERR_DLCW;
-
+        
         // Set message length to the correct DLC
         msg_length = (0xF | CANCDMOB);
     }
-
+    
     // Grab messages anyway
     for (int i = 0; i < msg_length; i++)
     {

@@ -19,7 +19,7 @@ void init_cfg(void) {
     for (int i = 0; i < TOTAL_IC; i++) {
         tx_cfg[i][0] = 0xFC | ADC_OPT;
         tx_cfg[i][1] = (uint8_t)(undervoltage_val & 0xFF);
-        tx_cfg[i][2] = (uint8_t)((overvoltage_val & 0x00F) | (undervoltage_val * 0xF00) >> 8));
+        tx_cfg[i][2] = (uint8_t)((overvoltage_val & 0x00F) | ((undervoltage_val * 0xF00) >> 8));
         tx_cfg[i][3] = (uint8_t)((overvoltage_val & 0xFF0) >> 4);
         tx_cfg[i][4] = 0x00;
         tx_cfg[i][5] = 0x00;
@@ -54,7 +54,7 @@ void o_ltc6811_rdcfg(uint8_t total_ic, // Number of ICs in the system
     uint8_t cmd[4];
     uint8_t *rx_data;
 
-    rx_data = (uint8_t *)malloc((8*total_ic)*sizeof(uint8_t));
+    rx_data = (uint8_t *) malloc((8*total_ic)*sizeof(uint8_t));
 
     cmd[0] = 0x00;
     cmd[1] = 0x02;
@@ -71,7 +71,7 @@ void o_ltc6811_rdcfg(uint8_t total_ic, // Number of ICs in the system
 }
 
 void o_ltc6811_wrcfg(uint8_t total_ic, // Number of ICs in the system
-        uint8_t r_config[][6] // A two dimensional array of the configuration data that will be written
+        uint8_t config[][6] // A two dimensional array of the configuration data that will be written
     )
 {
     /* This command will write the configuration registers in
@@ -79,12 +79,12 @@ void o_ltc6811_wrcfg(uint8_t total_ic, // Number of ICs in the system
         is written first.
     */
     const uint8_t BYTES_IN_REG = 6;
-    const CMD_LEN = 4 + (8*total_ic);
+    const uint8_t CMD_LEN = 4 + (8*total_ic);
     uint8_t *cmd;
     uint16_t cfg_pec;
     uint8_t cmd_index;  //command counter
 
-    cmd = (uint8_t *)malloc(CMD*sizeof(uint8_t));
+    cmd = (uint8_t *) malloc(CMD_LEN*sizeof(uint8_t));
 
     cmd[0] = 0x00;
     cmd[1] = 0x01;
@@ -100,7 +100,7 @@ void o_ltc6811_wrcfg(uint8_t total_ic, // Number of ICs in the system
             cmd[cmd_index] = config[current_ic-1][current_byte];
             cmd_index = cmd_index + 1;
         }
-        cfg_pec = (uint16_t)pec15_calc(BYTES_IN_REG, &config[current_ic-1][0]); // Calculate the PEC for each IC's configuration register data
+        cfg_pec = (uint16_t)pec15_calc(BYTES_IN_REG, & config[current_ic-1][0]); // Calculate the PEC for each IC's configuration register data
         cmd[cmd_index] = (uint8_t)(cfg_pec >> 8);
         cmd[cmd_index + 1] = (uint8_t)(cfg_pec);
         cmd_index = cmd_index + 2;

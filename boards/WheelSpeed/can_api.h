@@ -19,8 +19,6 @@
 #define CAN_ID_BMS_MASTER        ((uint16_t) 0x11)
 #define CAN_ID_BMS_TEMP          ((uint16_t) 0x12)
 #define CAN_ID_BMS_VOLT          ((uint16_t) 0x13)
-#define CAN_ID_BMS_DISCHARGE     ((uint16_t) 0x14)
-#define CAN_ID_MOTORCONTROLLER   ((uint16_t) 0x15)
 
 
 
@@ -30,15 +28,13 @@
 
 #define CAN_LEN_BRAKE_LIGHT     ((uint16_t) 8)
 #define CAN_LEN_THROTTLE        ((uint16_t) 5)
-#define CAN_LEN_AIR_CONTROL     ((uint16_t) 6)
+#define CAN_LEN_AIR_CONTROL     ((uint16_t) 4)
 #define CAN_LEN_DASHBOARD       ((uint16_t) 1)
 #define CAN_LEN_WHEELSPEED      ((uint16_t) 4)
 #define CAN_LEN_SUSPENSION      ((uint16_t) 6)
 #define CAN_LEN_BMS_MASTER      ((uint16_t) 5)
 #define CAN_LEN_BMS_TEMP        ((uint16_t) 8)
 #define CAN_LEN_BMS_VOLT        ((uint16_t) 8)
-#define CAN_LEN_BMS_DISCHARGE   ((uint16_t) 8)
-#define CAN_LEN_MOTORCONTROLLER ((uint16_t) 8)
 
 
 
