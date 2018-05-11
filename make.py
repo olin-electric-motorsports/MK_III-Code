@@ -18,12 +18,8 @@ import time
 
 
 CC = 'avr-gcc'
-<<<<<<< HEAD
-PROGRAMMER = 'usbtiny'
-=======
 PROGRAMMER = 'avrispmkII'
 # PROGRAMMER = 'dragon_isp'
->>>>>>> 789b05a56b8faa769198e37840b13bb53fa5ea6b
 PORT = 'usb'
 AVRDUDE = 'avrdude'
 OBJCOPY = 'avr-objcopy'
@@ -33,17 +29,11 @@ F_CPU = '4000000UL'
 COMPILER = 'gnu99'
 FUSE = '0x65'
 
-<<<<<<< HEAD
-CFLAGS = '-Os -g -mmcu=' + MCU + ' -std=' + COMPILER + ' -Wall -Werror -ff'
-LDFLAG = '-mmcu=' + MCU + ' -lm -std=' +at COMPILER
-AVRFLAGS = '-p -B2 ' + MCU + ' -v -c ' + PROGRAMMER + ' -p ' + PART
-=======
 
 
 CFLAGS = '-Os -g -mmcu=' + MCU + ' -std=' + COMPILER + ' -Wall -Werror '
 LDFLAG = '-mmcu=' + MCU + ' -lm -std=' + COMPILER + ' -DF_CPU=' + F_CPU
 AVRFLAGS = '-B5 -v -c' + PROGRAMMER + ' -p ' + MCU + ' -P ' + PORT
->>>>>>> 789b05a56b8faa769198e37840b13bb53fa5ea6b
 
 possible_boards = []
 
