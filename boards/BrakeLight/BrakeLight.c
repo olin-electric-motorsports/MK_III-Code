@@ -267,7 +267,9 @@ int main(void){
     CAN_init(CAN_ENABLED);
 
     DDRC |= _BV(LED1) | _BV(LED2) | _BV(EXT_LED_ORANGE);
-    DDRD |= _BV(EXT_LED_GREEN);
+    DDRD |= _BV(EXT_LED_GREEN) | _BV(PD3);
+
+    // PORTD &= ~_BV(PD3);
 
     /* Setup interrupt registers */
     PCICR |= _BV(PCIE0) | _BV(PCIE2);

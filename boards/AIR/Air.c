@@ -6,7 +6,7 @@ Author:
 */
 
 /*----- Includes -----*/
-#define F_CPU(16000000UL)
+// #define F_CPU(16000000UL)
 #include <stdio.h>
 #include <stdlib.io>
 #include <string.h>
@@ -28,44 +28,44 @@ Author:
 #define FINAL_SHUTDOWN_RELAY		PD7
 #define PIN_FINAL_SHUTDOWN_RELAY	PIND
 
-#define PIN_SenseBMS PD5
-#define PIN_SenseIMD PD6
-#define PIN_SenseConnToHVD PB2
-#define PIN_SenseMainTSConn PD7
-#define IMD_STATUS PD1
-#define BMS_STATUS PC1
+#define PIN_SenseBMS                PD5
+#define PIN_SenseIMD                PD6
+#define PIN_SenseConnToHVD          PB2
+#define PIN_SenseMainTSConn         PD7
+#define IMD_STATUS                  PD1
+#define BMS_STATUS                  PC1
 
 // Precharge & AIR
-#define PRECHARGE 	PC4
-#define PIN_AIR_LSD		PC5
-#define AIR_Weld_Detect		PC6
+#define PRECHARGE 	                PC4
+#define PIN_AIR_LSD		            PC5
+#define AIR_Weld_Detect		        PC6
 
 // CAN Message Objects
-#define GLOBAL_SHUTDOWN      0x0
-#define BROADCAST_Mob	0
-#define BMS_READ_Mob	1
+#define GLOBAL_SHUTDOWN             0x0
+#define BROADCAST_Mob	            0
+#define BMS_READ_Mob	            1
 
 /*---- CAN Position Macros ----*/
-#define BMS 0
-#define IMD 1
-#define MainTSConn 3
-#define HVD 4
-#define BMS_Status 5
-#define IMD_Status 6
+#define BMS                     0
+#define IMD                     1
+#define MainTSConn              3
+#define HVD                     4
+#define BMS_Status              5
+#define IMD_Status              6
 
 /*----- GLOBAL FLAGS -----*/
-#define HVD_SD_FLAG 	0
-#define BMS_SD_FLAG 	1
-#define IMD_SD_FLAG  2
-#define MainTS_SD_FLAG 3
-#define IMD_STATUS_FLAG 4
-#define BMS_STATUS_FLAG 5
-#define AIR_minus_STATUS_FLAG 6
-#define Brake_Light 7
+#define HVD_SD_FLAG 	       0
+#define BMS_SD_FLAG 	       1
+#define IMD_SD_FLAG            2
+#define MainTS_SD_FLAG         3
+#define IMD_STATUS_FLAG        4
+#define BMS_STATUS_FLAG        5
+#define AIR_minus_STATUS_FLAG  6
+#define Brake_Light            7
 
 
-#define UPDATE_STATUS_FLAG 0
-#define AIR_plus_STATUS_FLAG 0
+#define UPDATE_STATUS_FLAG     0
+#define AIR_plus_STATUS_FLAG   0
 
 
 volatile uint8_t gFlag = 0x00;
@@ -82,12 +82,13 @@ uint8_t gCANMessage[8] = {0, 0, 0, 0, 0, 0, 0, 0};
 /*----- FUNCTION DEFINITIONS -----*/
 void enableInterrupt(){
   sei();  //Enable Global Interrupt
+  CAN_init(CAN_ENABLED);       //Enable CAN interrupt
 
   // Enable Pin Change Interrupt Enable 2
   PCICR |= _BV(PCIE2) | _BV(PCIE1) | _BV(PCIE0);
   // Enable Pin Change Interrupts on PCINT[23:21] (PD[7:5], Sense[BMS, IMD, MainTS])
   // and PCINT17(IMD Status, PD1)
-  PCMSK2 = (_BV(PCINT23) | _BV(PCINT22) | _BV(PCINT21);
+  PCMSK2 = (_BV(PCINT23) | _BV(PCINT22);
   // Enable Pin Change Interrupts on PCINT9 (BMS_Staus, PC1)
   PCMSK1 |= _BV(PCINT9);
 
@@ -203,7 +204,7 @@ void low_side_drive_AIR_plus(){
 
 
 /*----- INTERRUPT DEFINITIONS -----*/
-ISR(PCI2_vect){
+ISR(PCINT2_vect){
   /*When Pin Change Interrupt 2 is triggered, check the status on
   BMS, IMD, and MainTSConn; check whether BMS are the same or
   different, if not send message*/
@@ -277,7 +278,7 @@ ISR(PCI2_vect){
 }
 
 
-ISR(PCI1_vect){
+ISR(PCINT1_vect){
   if(!BMS_status()){
     gCANMessage[BMS_Status] = 0x00;
     gFlag &= ~_BV(BMS_STATUS_FLAG);
@@ -292,7 +293,7 @@ ISR(PCI1_vect){
 }
 
 
-ISR(PCI0_vect){
+ISR(PCINT0_vect){
   /*When Pin Change Interrupt 1 is triggered, check the status on
   ConnToHVD*/
   if (check_HVD()){
@@ -346,7 +347,7 @@ ISR(CAN_INT_vect) {
   // Check first board (Dashboard)
 
   /*** Check Brake Light First ***/
-  // Turn to the Brake Light MOB
+  // Turn to the Brake Light Mailbox
   CANPAGE = MOB_BRAKE_LIGHT << MOBNB0;
   if (bit_is_set(CANSTMOB, RXOK)){
     volatile uint8_t msg = CANMSG;
@@ -381,8 +382,8 @@ int main(void){
   DDRB |= _BV(LED1) | _BV(LED2); //Makes PB0 and PB1 as output
   DDRB &= ~(_BV(PIN_SenseConnToHVD));//SET SenseConnToHVD as input
   DDRC |= _BV(PRECHARGE) | _BV(EXT_LED2) | _BV(PIN_AIR_LSD); //SET Precharge as output
-  DDRC &= ~(_BV(AIR_Weld_Detect)) | _BV(BMS_STATUS); //SET
-  DDRD |= _BV(EXT_LED1);
+  DDRC &= ~(_BV(AIR_Weld_Detect)) | _BV(BMS_STATUS); //SET as input
+  DDRD |= _BV(EXT_LED1);    // SET external LED as output
   DDRD &= ~(_BV(PIN_SenseIMD)) & ~(_BV(PIN_SenseBMS)) & ~(_BV(PIN_SenseMainTSConn)) & ~(_BV(PD3)); //SET IMD, BMS, SenseMainTSConn as input
 
   while(1){
