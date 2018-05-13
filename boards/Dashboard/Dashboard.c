@@ -33,6 +33,12 @@ Author:
 #define START_PIN                   PB2
 #define PORT_START                  PORTB
 
+
+#define AMS_PIN                     PB1
+#define PORT_AMS                    PORTB
+#define IMD_PIN                     PB0
+#define PORT_IMD                    PORTB
+
 // CAN Positions
 #define CAN_START_BUTTON            0
 
@@ -89,6 +95,30 @@ ISR(CAN_INT_vect) {
         //Setup to Receive Again
         CANSTMOB = 0x00;
         CAN_wait_on_receive(0, CAN_ID_BRAKE_LIGHT, CAN_LEN_BRAKE_LIGHT, CAN_IDM_single);
+
+        //TODO mailboxes?
+
+        CANPAGE = (1 << MOBNB0); //repeat with mailbox 1 to listen for AMS and IMD
+        if(bit_is_set(CANSTMOB, RXOK)) {
+          // Where are AMS and IMD in here?
+          volatile uint8_t msg = CANMSG;      //grab the first byte of the CAN message
+          uint8_t brake = CANMSG;
+          uint8_t brake_pos = CANMSG;
+          uint8_t bspd = CANMSG;
+          uint8_t hvd = CANMSG;
+          uint8_t tsms = CANMSG;
+          uint8_t left_e_stop = CANMSG;
+          uint8_t right_e_stop = CANMSG;
+          uint8_t main_fuse = CANMSG;
+
+          // If AMS shutdown is true, make AMS_PIN high
+
+          // If IMD shutdown is true, make IMD_PIN high (if IMD goes low within 2 seconds of car on)
+          // make sure these latch (don't turn off until board is turned off)
+
+          CANSTMOB = 0x00;
+          // IMD --> AIR control AMS --> BMS master
+          CAN_wait_on_receive(0, CAN_, CAN_LEN_BRAKE_LIGHT, 0xFF);
     }
 }
 
