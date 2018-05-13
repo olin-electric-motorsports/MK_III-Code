@@ -237,8 +237,10 @@ static inline void updateStateFromFlags(void) {
 
     if(bit_is_set(gFlag, STATUS_BRAKE)) {
         gCAN_MSG[CAN_BRAKE] = 0xFF;
+        PORT_LED2 |= _BV(LED2);
     } else {
         gCAN_MSG[CAN_BRAKE] = 0x00;
+        PORT_LED2 &= ~_BV(LED2);
     }
 
 }
@@ -262,6 +264,10 @@ int main(void){
         -Every 40 timer cycles, send brake position
     */
     sei();                              // Enable interrupts
+    CAN_init(CAN_ENABLED);
+
+    DDRC |= _BV(LED1) | _BV(LED2) | _BV(EXT_LED_ORANGE);
+    DDRD |= _BV(EXT_LED_GREEN);
 
     /* Setup interrupt registers */
     PCICR |= _BV(PCIE0) | _BV(PCIE2);
@@ -272,16 +278,17 @@ int main(void){
     gTimerFlag |= _BV(UPDATE_STATUS);        // Read ports
 
     while(1) {
+        // PORT_LED1 |= _BV(LED1);
         if(bit_is_set(gTimerFlag, UPDATE_STATUS)) {
-            PORT_EXT_LED_ORANGE ^= _BV(EXT_LED_ORANGE);     // Blink Orange LED for timing check
+            PORT_LED1 ^= _BV(LED1);     // Blink Orange LED for timing check
 
             updateStateFromFlags();     // Build CAN message based off flags
-            gTimerFlag &= ~_BV(UPDATE_STATUS);
+            gTimerFlag &= ~_BV(UPDATE_STATUS);  // Clear Flag
 
-            if(bit_is_set(gTimerFlag, SEND_BRAKE)) {
-                mapBrakePos();              // Add brake position to CAN message
-                gTimerFlag &= ~_BV(SEND_BRAKE);
-            }
+            // if(bit_is_set(gTimerFlag, SEND_BRAKE)) {
+            //     mapBrakePos();              // Add brake position to CAN message
+            //     gTimerFlag &= ~_BV(SEND_BRAKE);
+            // }
 
             // Send CAN message
             CAN_transmit(BROADCAST_MOb, CAN_ID_BRAKE_LIGHT,
