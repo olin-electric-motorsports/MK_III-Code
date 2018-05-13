@@ -14,6 +14,7 @@ Author:
 #include <avr/interrupt.h>
 #include <util/delay.h>
 #include "can_api.h"
+#include "log_uart.h"
 
 /*----- Macro Definitions -----*/
 /* Shutdown */
@@ -76,7 +77,7 @@ Author:
 #define MOB_BROADCAST           0
 #define MOB_MOTORCONTROLLER     1
 
-// for gTimer
+// for gTimerFlag
 #define UPDATE_STATUS           0
 #define IMPLAUSIBILITY_ERROR    1
 
@@ -97,10 +98,16 @@ volatile uint8_t gFlag = 0x00;  // Global Flag
 volatile uint8_t gTimerFlag = 0x01; // Timer Flag
 
 uint8_t gThrottle[2] = {0x00,0x00};
+uint16_t gThrottle16[2] = {0x00,0x00};
 uint8_t gThrottleSmoothed = 0x00;
 uint8_t gThrottleThreshold = 0xA6;// used for troubleshooting
 uint8_t gSteering = 0x00;
 uint8_t gSteeringThreshold = 0x7F;// used for troubleshooting
+#define gAvg                    8//options are: 4,8,16,32
+//gAvg is the number of values from the ADC it uses to average the
+//throttle value for. so 8 would mean 8 values it averages for one
+//throttle value. Would reccomend 32 for drive days and 8 for competition
+//-Corey, May 9th
 
 // CAN Message
 uint8_t gCANMessage[8] = {0, 0, 0, 0, 0, 0, 0, 0};
@@ -108,20 +115,21 @@ uint8_t gCANMessage[8] = {0, 0, 0, 0, 0, 0, 0, 0};
 uint8_t gCANMotorController[8] = {0, 0, 0, 0, 0, 0, 0, 0};
 
 // Throttle mapping values
-// NEEDS TO BE SET ACCORDING TO READ VALUES
-uint8_t throttle1_HIGH = 0x00;
-uint8_t throttle1_LOW = 0x00;
-uint8_t throttle2_HIGH = 0x00;
-uint8_t throttle2_LOW = 0x00;
+// NEEDS TO BE SET ACCORDING TO READ VALUES AFTER CENTERING
+//Values set last on May 9th by Corey
+uint16_t throttle1_HIGH = 0xA0;//160
+uint16_t throttle1_LOW = 0x0c;
+uint16_t throttle2_HIGH = 0xA0;//160
+uint16_t throttle2_LOW = 0x06;
 
-uint8_t THROTTLE_MAX_ADJUST_AMOUNT = 0x00;
+uint8_t THROTTLE_MAX_ADJUST_AMOUNT = 20;
 
-uint8_t throttle_10_count = 0x00;
+uint16_t throttle_10_count = 0x00;
 
 /*----- Timer Counters ----- */
 uint8_t clock_prescale = 0x00;
 uint8_t timer_counter = 0x00;
-uint8_t imp_error = 0x00;
+uint32_t imp_error = 0x00;
 
 
 /*----- Interrupt(s) -----*/
@@ -157,22 +165,22 @@ ISR(CAN_INT_vect) {
     }
 
     // Air control unnesecary??
-    CANPAGE = (MOB_AIR_CONTROL << MOBNB0);
-    if (bit_is_set(CANSTMOB,RXOK)) {
-        volatile int8_t msg = CANMSG;
-
-        if(msg == 0xFF){
-            gFlag |= _BV(FLAG_AIRS);
-        } else {
-            gFlag &= ~_BV(FLAG_AIRS);
-        }
-
-        CANSTMOB = 0x00;
-        CAN_wait_on_receive(MOB_AIR_CONTROL,
-                            CAN_ID_AIR_CONTROL,
-                            CAN_LEN_AIR_CONTROL,
-                            CAN_IDM_single);
-    }
+    // CANPAGE = (MOB_AIR_CONTROL << MOBNB0);
+    // if (bit_is_set(CANSTMOB,RXOK)) {
+    //     volatile int8_t msg = CANMSG;
+    //
+    //     if(msg == 0xFF){
+    //         gFlag |= _BV(FLAG_AIRS);
+    //     } else {
+    //         gFlag &= ~_BV(FLAG_AIRS);
+    //     }
+    //
+    //     CANSTMOB = 0x00;
+    //     CAN_wait_on_receive(MOB_AIR_CONTROL,
+    //                         CAN_ID_AIR_CONTROL,
+    //                         CAN_LEN_AIR_CONTROL,
+    //                         CAN_IDM_single);
+    // }
 
     //Start button
     CANPAGE = (MOB_DASHBOARD << MOBNB0);
@@ -225,15 +233,16 @@ ISR(TIMER0_COMPA_vect) {
     /*
     Timer/Counter0 compare match A
     */
-    if(clock_prescale>20) {
+
+    clock_prescale ++;
+    if(clock_prescale>0) {
         gTimerFlag |= _BV(UPDATE_STATUS);
         clock_prescale = 0;
     }
-    clock_prescale ++;
 
     if(bit_is_set(gFlag,FLAG_THROTTLE_10)){
         imp_error++;
-        // 4Mgz *.1 = 400,000 cycles
+        // 4Mhz *.1 = 400,000 cycles
         if(imp_error > 400000){
             gFlag |= _BV(FLAG_PANIC);
         }
@@ -323,7 +332,7 @@ void testInputs(int test) {
        should turn on if they've been initiated correctly
        test == 1 checks the pots on the car.
        test == 2 checks the interrpt flags for the shutdown circuit
-       test == 3 checks if the throttle is 10% to one another which should only happen at 0
+       test == 3 checks if the throttle is 10% to one another
 
     */
 
@@ -331,6 +340,14 @@ void testInputs(int test) {
     /*--- Set LED's on if > 50% ---*/
     /*--- Pull ups' on all three ---*/
     if(test == 1){
+        // LOG_chr(gThrottle[0]);
+        // LOG_chr(gThrottle[1]);
+        char disp_string[64];
+        // char static_msg1[] = "Throttle Left";
+        // char static_msg2[] = "Throttle Right";
+        // LOG_println(static_msg1,strlen(static_msg1))
+        sprintf(disp_string,"Throttle left is %d, Throttle right is %d",gThrottle[0],gThrottle[1]);
+        LOG_println(disp_string,strlen(disp_string));
 
         if(gThrottle[1] > gThrottleThreshold){
             LED2_PORT |= _BV(LED2);
@@ -398,19 +415,19 @@ void readPots(void) {
        in their appropriate variables
        Reads: throttle1,throttle2, and steering
     */
-    gFlag &= ~_BV(FLAG_THROTTLE_10);
 
     ADMUX = _BV(REFS0);
     ADMUX |= 8; //pin is also known as ADC8
     ADCSRA |= _BV(ADSC);
     loop_until_bit_is_clear(ADCSRA, ADSC);
-    uint8_t throttle1 = (uint8_t) (ADC >> 2);
+    uint16_t throttle1 = ADC;
 
     ADMUX = _BV(REFS0);
     ADMUX |= 9;
     ADCSRA |= _BV(ADSC);
     loop_until_bit_is_clear(ADCSRA, ADSC);
-    uint8_t throttle2 = (uint8_t) (ADC >> 2);
+    uint16_t throttle2 = ADC;
+
 
     ADMUX = _BV(REFS0);
     ADMUX |= 2;
@@ -418,70 +435,98 @@ void readPots(void) {
     loop_until_bit_is_clear(ADCSRA, ADSC);
     uint8_t steering = (uint8_t) (ADC >> 2);
 
-    uint8_t err = 0;
-    if (throttle1 > throttle2 && (throttle1 - throttle2) <= (0xFF/10)) {
-        err = 1;
-        // throttle_10_count++;
-        gFlag |= _BV(FLAG_THROTTLE_10);
-    }
-    else if (throttle2 > throttle1 && (throttle2 - throttle1) <= (0xFF/10)) {
-        err = 1;
-        // throttle_10_count++;
-        gFlag |= _BV(FLAG_THROTTLE_10);
-    }
+    // char disp_string[64];
+    // sprintf(disp_string,"Throttle left is %d, Throttle right is %d",throttle1,throttle2);
+    // LOG_println(disp_string,strlen(disp_string));
+    //
+    // LED1_PORT ^= _BV(LED1);
 
-    gThrottle[0] = throttle1;
-    gThrottle[1] = throttle2;
+    gThrottle16[0] = throttle1;
+    gThrottle16[1] = throttle2;
     gSteering = steering;
-
-
 }
 
 void mapAndStoreThrottle(void){
-    uint8_t throttle1 = gThrottle[0];
-    uint8_t throttle2 = gThrottle[1];
+    // we store a 10-bit value into a 32-bits so that the atmega can have enough room to
+    // do the math necessary to accomodate for the amplification
+    uint32_t throttle1 = gThrottle16[0];
+    uint32_t throttle2 = gThrottle16[1];
 
-    if (throttle1 > throttle1_HIGH) {
-        if (throttle1 > (throttle1_HIGH + THROTTLE_MAX_ADJUST_AMOUNT)) {
-            gFlag |= _BV(FLAG_PANIC);
-            return;
-        }
-        throttle1 = throttle1_HIGH;
+    // Adjust for amplification
+    uint8_t throttle1_centered = throttle1 >> 2;
+    uint8_t throttle2_centered = ((throttle2 * 100)/122) >> 2;
+
+    if(throttle1_centered > throttle1_HIGH && throttle1_centered < throttle1_HIGH + THROTTLE_MAX_ADJUST_AMOUNT){
+        throttle1_centered = throttle1_HIGH;
+    } else if(throttle1_centered  < throttle1_LOW){
+        throttle1_centered = throttle1_LOW;
+    }
+    if(throttle2_centered > throttle2_HIGH && throttle1_centered < throttle2_HIGH + THROTTLE_MAX_ADJUST_AMOUNT){
+        throttle2_centered = throttle2_HIGH;
+    } else if(throttle2_centered  < throttle2_LOW){
+        throttle2_centered = throttle2_LOW;
     }
 
-    if (throttle2 > throttle2_HIGH) {
-        if (throttle2 > (throttle2_HIGH + THROTTLE_MAX_ADJUST_AMOUNT)) {
-            gFlag |= _BV(FLAG_PANIC);
-            return;
-        }
-        throttle2 = throttle2_HIGH;
-    }
+    //Map between 0 and 255
+    uint8_t throttle1_mapped = ((throttle1_centered - throttle1_LOW) * 0xff) / (throttle1_HIGH-throttle1_LOW);
+    uint8_t throttle2_mapped = ((throttle2_centered - throttle2_LOW) * 0xff) / (throttle2_HIGH-throttle2_LOW);
 
-    // Map both to 0x00-0xFF range
-    uint8_t throttle1_mapped = ((throttle1 - throttle1_LOW) * 0xFF) / (throttle1_HIGH - throttle1_LOW);
-    uint8_t throttle2_mapped = ((throttle2 - throttle2_LOW) * 0xFF) / (throttle2_HIGH - throttle2_LOW);
+    // char disp_string3[64];
+    // sprintf(disp_string3,"Throttle1 centered is %d, Throttle2 centered is %d",throttle1_centered,throttle2_centered);
+    // LOG_println(disp_string3,strlen(disp_string3));
+
+    // char tmap[64];
+    // sprintf(tmap,"Throttle left is %d, Throttle right is %d",throttle1_mapped,throttle2_mapped);
+    // LOG_println(tmap,strlen(tmap));
 
     // Rolling average
-    static uint8_t rolling1[32];
-    static uint8_t rolling2[32];
+    // Only one of below will be flashed during compiling according to gAvg
+    // The length of the arrays dictates not only the accuracy but the speed
+    // at which the throttle value changes
+    #if(gAvg == 4)
+        uint8_t scale = 4;
+        uint8_t pow2 = 2;
+        static uint8_t rolling1[4];
+        static uint8_t rolling2[4];
+    #elif(gAvg == 8)
+        uint8_t scale = 8;
+        uint8_t pow2 = 3;
+        static uint8_t rolling1[8];
+        static uint8_t rolling2[8];
+    #elif(gAvg == 16)
+        uint8_t scale = 16;
+        uint8_t pow2 = 4;
+        static uint8_t rolling1[16];
+        static uint8_t rolling2[16];
+    #else
+        uint8_t scale = 32;
+        uint8_t pow2 = 5;
+        static uint8_t rolling1[32];
+        static uint8_t rolling2[32];
+    #endif
 
-    for (int i=0; i < 31; i++) {
+
+    for (int i=0; i < scale-1; i++) {
         rolling1[i] = rolling1[i+1];
         rolling2[i] = rolling2[i+1];
     }
-    rolling1[31] = throttle1_mapped;
-    rolling2[31] = throttle2_mapped;
+    rolling1[scale-1] = throttle1_mapped;
+    rolling2[scale-1] = throttle2_mapped;
 
-    uint16_t avg1 = 0;
-    uint16_t avg2 = 0;
+    long long avg1 = 0;
+    long long avg2 = 0;
 
-    for (int i=0; i < 32; i++) {
+    for (int i=0; i < scale; i++) {
         avg1 += rolling1[i];
         avg2 += rolling2[i];
     }
+    // bit shift to the right since it's the same as dividing by 32 (2^5)
+    throttle1_mapped = avg1 >> pow2;
+    throttle2_mapped = avg2 >> pow2;
 
-    throttle1_mapped = avg1 >> 5;
-    throttle2_mapped = avg2 >> 5;
+    // char disp_string[64];
+    // sprintf(disp_string,"Throttle left AVERAGE is %d, Throttle right AVERAGE is %d",throttle1_mapped,throttle2_mapped);
+    // LOG_println(disp_string,strlen(disp_string));
 
     // Check if they are within 10%
     uint8_t err = 0;
@@ -503,7 +548,6 @@ void mapAndStoreThrottle(void){
         gFlag |= _BV(FLAG_PANIC);
         return;
     }
-
     if (bit_is_clear(gFlag, FLAG_BRAKE)) {
         gThrottle[0] = throttle1_mapped;
         gThrottle[1] = throttle2_mapped;
@@ -512,15 +556,12 @@ void mapAndStoreThrottle(void){
         gThrottle[1] = 0x00;
         // gFlag |= _BV(FLAG_THROTTLE_BRAKE);
     }
-
-
-
 }
 
-void sendCanMessages(void){
+void sendCanMessages(int viewCan){
 
     if(bit_is_set(gFlag,FLAG_PANIC)) {
-        return;
+        // return;
     }
 
     gCANMessage[0] = gThrottle[0];
@@ -552,7 +593,21 @@ void sendCanMessages(void){
                  CAN_ID_MOTORCONTROLLER,
                  CAN_LEN_MOTORCONTROLLER,
                  gCANMotorController);
+    if(viewCan){
+        char msg1[128];
+        char msg2[128];
+        sprintf(msg1,"CAN message one to all:\nThrottle:%d\nSteering:%d\nBOTS:%d\nInertia:%d\nEstop:%d",
+        gCANMessage[0],gCANMessage[1],gCANMessage[2],gCANMessage[3],gCANMessage[4]);
+        LOG_println(msg1,strlen(msg1));
+        sprintf(msg2,"CAN message to motorcontroller:\n%d\n%d\n%d\n%d\n%d\n%d\n%d\n%d",
+        gCANMotorController[0],gCANMotorController[1],gCANMotorController[2],gCANMotorController[3],
+        gCANMotorController[4],gCANMotorController[5],gCANMotorController[6],gCANMotorController[7]);
+        LOG_println(msg2,strlen(msg2));
 
+    }
+
+
+    EXT_LED_PORT ^= _BV(EXT_LED2);
 }
 
 
@@ -568,6 +623,7 @@ int main(void){
     initTimer();
     initADC();
     sei();
+    LOG_init();
 
     // Set interrupt registers
     PCICR |= _BV(PCIE0);
@@ -575,18 +631,29 @@ int main(void){
 
     // Set pins to output
     DDRC |= _BV(LED1);
-    DDRB |= _BV(LED2);
-    DDRB |= _BV(LED3);
+    DDRB |= _BV(LED2) | _BV(LED3);
     DDRC |= _BV(RTD_LD);
+    DDRB |= _BV(EXT_LED1) | _BV(EXT_LED2);
 
     // set pull up resistor for steering
     STEERING_PORT |= _BV(STEERING);
 
-    // turn on RTD for .4 seconds
-    // just for wiring harness, not necessary
-    RTD_PORT |= _BV(RTD_LD);
-    _delay_ms(400);
-    RTD_PORT &= ~(_BV(RTD_LD));
+    // Commenting this out because it's awful - Hoppe 4/28/18
+    // // turn on RTD for .4 seconds
+    // // just for wiring harness, not necessary
+    // RTD_PORT |= _BV(RTD_LD);
+    // _delay_ms(400);
+    // RTD_PORT &= ~(_BV(RTD_LD));
+
+    CAN_wait_on_receive(MOB_DASHBOARD,
+                        CAN_ID_DASHBOARD,
+                        CAN_LEN_DASHBOARD,
+                        CAN_IDM_single);
+
+    CAN_wait_on_receive(MOB_BRAKELIGHT,
+                        CAN_ID_BRAKE_LIGHT,
+                        CAN_LEN_BRAKE_LIGHT,
+                        CAN_IDM_single);
 
     while(1){
         if(bit_is_set(gTimerFlag,UPDATE_STATUS)){
@@ -595,11 +662,11 @@ int main(void){
 
             checkShutdownState();
             readPots();
-            testInputs(1);
+            testInputs(0);
             mapAndStoreThrottle();
             updateStateFromFlags();
 
-            sendCanMessages();
+            sendCanMessages(0);
         }
     }
 }
