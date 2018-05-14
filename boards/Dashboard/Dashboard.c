@@ -43,10 +43,19 @@ Author:
 #define CAN_START_BUTTON            0
 
 
+// CAN Mailboxes
+#define BRAKE_LIGHT_MBOX            0
+#define BMS_MBOX                    1
+#define AIR_MBOX                    2
+
+
+
 // gFlag positions
 #define STATUS_START                1
 #define BRAKE_PRESSED               2
 #define TSMS_CLOSED                 3
+#define AMS_LIGHT                   4
+#define IMD_LIGHT                   5
 
 
 #define UPDATE_STATUS               0
@@ -65,8 +74,9 @@ uint8_t gClock_prescale = 0x00;  // Used for update timer
 /*----- Interrupt(s) -----*/
 // *pg 76 of datasheet*
 ISR(CAN_INT_vect) {
-    // Check first board (Brake Light)
-    CANPAGE = (0 << MOBNB0);
+
+    /*----- Brake Light Mailbox -----*/
+    CANPAGE = (BRAKE_LIGHT_MBOX << MOBNB0);
     if(bit_is_set(CANSTMOB, RXOK)) {
         can_recv_msg[0] = CANMSG;   // brake
         can_recv_msg[1] = CANMSG;   // brake_pos
@@ -76,9 +86,6 @@ ISR(CAN_INT_vect) {
         can_recv_msg[5] = CANMSG;   // left_e_stop
         can_recv_msg[6] = CANMSG;   // right_e_stop
         can_recv_msg[7] = CANMSG;   // main_fuse
-
-        // can_recv_msg[0] = msg;
-        // can_recv_msg[1] = 0x99;
 
         if(can_recv_msg[0] == 0xFF) {
             gFlag |= _BV(BRAKE_PRESSED);           //trip flag
@@ -94,31 +101,46 @@ ISR(CAN_INT_vect) {
 
         //Setup to Receive Again
         CANSTMOB = 0x00;
-        CAN_wait_on_receive(0, CAN_ID_BRAKE_LIGHT, CAN_LEN_BRAKE_LIGHT, CAN_IDM_single);
+        CAN_wait_on_receive(BRAKE_LIGHT_MBOX, CAN_ID_BRAKE_LIGHT, CAN_LEN_BRAKE_LIGHT, CAN_IDM_single);
+    }
 
-        //TODO mailboxes?
+    /*----- BMS Master Mailbox -----*/
+    CANPAGE = (BMS_MBOX << MOBNB0); //repeat with mailbox 1 to listen for AMS and IMD
+    if(bit_is_set(CANSTMOB, RXOK)) {
+      can_recv_msg[0] = CANMSG;   // AMS light
+      can_recv_msg[1] = CANMSG;   // IMD light
+      can_recv_msg[2] = CANMSG;   // temperature
+      can_recv_msg[3] = CANMSG;   // Avg. voltage
+      can_recv_msg[4] = CANMSG;   // Avg. current
 
-        CANPAGE = (1 << MOBNB0); //repeat with mailbox 1 to listen for AMS and IMD
-        if(bit_is_set(CANSTMOB, RXOK)) {
-          // Where are AMS and IMD in here?
-          volatile uint8_t msg = CANMSG;      //grab the first byte of the CAN message
-          uint8_t brake = CANMSG;
-          uint8_t brake_pos = CANMSG;
-          uint8_t bspd = CANMSG;
-          uint8_t hvd = CANMSG;
-          uint8_t tsms = CANMSG;
-          uint8_t left_e_stop = CANMSG;
-          uint8_t right_e_stop = CANMSG;
-          uint8_t main_fuse = CANMSG;
+      // If AMS shutdown is true, make AMS_PIN high
 
-          // If AMS shutdown is true, make AMS_PIN high
+      // If IMD shutdown is true, make IMD_PIN high (if IMD goes low within 2 seconds of car on)
+      // make sure these latch (don't turn off until board is turned off)
 
-          // If IMD shutdown is true, make IMD_PIN high (if IMD goes low within 2 seconds of car on)
-          // make sure these latch (don't turn off until board is turned off)
+      //Setup to Receive Again
+      CANSTMOB = 0x00;
+      CAN_wait_on_receive(BMS_MBOX, CAN_ID_BMS_MASTER, CAN_LEN_BMS_MASTER, CAN_IDM_single);
+    }
 
-          CANSTMOB = 0x00;
-          // IMD --> AIR control AMS --> BMS master
-          CAN_wait_on_receive(0, CAN_, CAN_LEN_BRAKE_LIGHT, 0xFF);
+    /*----- AIRs Mailbox -----*/
+    CANPAGE = (AIR_MBOX << MOBNB0); //repeat with mailbox 1 to listen for AMS and IMD
+    if(bit_is_set(CANSTMOB, RXOK)) {
+      can_recv_msg[0] = CANMSG;   // BMS shutdown
+      can_recv_msg[1] = CANMSG;   // IMD shutdown
+      can_recv_msg[2] = CANMSG;   // Main tractive system
+      can_recv_msg[3] = CANMSG;   // Connector to HVD
+      can_recv_msg[4] = CANMSG;   // BMS status
+      can_recv_msg[5] = CANMSG;   // IMD status
+
+      // If AMS shutdown is true, make AMS_PIN high
+
+      // If IMD shutdown is true, make IMD_PIN high (if IMD goes low within 2 seconds of car on)
+      // make sure these latch (don't turn off until board is turned off)
+
+      //Setup to Receive Again
+      CANSTMOB = 0x00;
+      CAN_wait_on_receive(AIR_MBOX, CAN_ID_AIR_CONTROL, CAN_LEN_AIR_CONTROL, CAN_IDM_single);
     }
 }
 
@@ -196,7 +218,9 @@ int main(void){
 
     // CAN Enable
     CAN_init(CAN_ENABLED);
-    CAN_wait_on_receive(0, CAN_ID_BRAKE_LIGHT, CAN_LEN_BRAKE_LIGHT, CAN_IDM_single);
+    CAN_wait_on_receive(BRAKE_LIGHT_MBOX, CAN_ID_BRAKE_LIGHT, CAN_LEN_BRAKE_LIGHT, CAN_IDM_single);
+    CAN_wait_on_receive(BMS_MBOX, CAN_ID_BMS_MASTER, CAN_LEN_BMS_MASTER, CAN_IDM_single);
+    CAN_wait_on_receive(AIR_MBOX, CAN_ID_AIR_CONTROL, CAN_LEN_AIR_CONTROL, CAN_IDM_single);
 
     initTimer();
 
