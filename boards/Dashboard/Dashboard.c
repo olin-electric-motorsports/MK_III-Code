@@ -112,8 +112,13 @@ ISR(CAN_INT_vect) {
           uint8_t main_fuse = CANMSG;
 
           // If AMS shutdown is true, make AMS_PIN high
-
+          if() {
+            PORT_AMS ^= _BV(AMS_PIN);
+          }
           // If IMD shutdown is true, make IMD_PIN high (if IMD goes low within 2 seconds of car on)
+          if() {
+            PORT_IMD ^= _BV(IMD_PIN);
+          }
           // make sure these latch (don't turn off until board is turned off)
 
           CANSTMOB = 0x00;
