@@ -28,6 +28,12 @@ Author:
 #define LED1_PIN                    PB6
 #define PORT_LED1                   PORTB
 
+// AMS and IMD Lights
+#define AMS_PIN                     PB1
+#define PORT_AMS                    PORTB
+#define IMD_PIN                     PB0
+#define PORT_IMD                    PORTB
+
 
 // I/O
 #define START_PIN                   PB2
@@ -55,7 +61,7 @@ Author:
 #define BRAKE_PRESSED               2
 #define TSMS_CLOSED                 3
 #define AMS_LIGHT                   4
-#define IMD_LIGHT                   5
+#define IMD_STATUS                  5
 
 
 #define UPDATE_STATUS               0
@@ -68,6 +74,13 @@ uint8_t can_recv_msg[8] = {};
 
 // Timer counters
 uint8_t gClock_prescale = 0x00;  // Used for update timer
+
+
+// Temp and Voltage Vars
+uint8_t curr_temp;      // Temp
+uint8_t curr_volt;      // Voltage
+uint8_t curr_current;   // Current
+uint8_t curr_SoC;       // State of charge
 
 
 
@@ -105,13 +118,28 @@ ISR(CAN_INT_vect) {
     }
 
     /*----- BMS Master Mailbox -----*/
-    CANPAGE = (BMS_MBOX << MOBNB0); //repeat with mailbox 1 to listen for AMS and IMD
+    CANPAGE = (BMS_MBOX << MOBNB0);
     if(bit_is_set(CANSTMOB, RXOK)) {
       can_recv_msg[0] = CANMSG;   // AMS light
       can_recv_msg[1] = CANMSG;   // IMD light
       can_recv_msg[2] = CANMSG;   // temperature
       can_recv_msg[3] = CANMSG;   // Avg. voltage
       can_recv_msg[4] = CANMSG;   // Avg. current
+      can_recv_msg[5] = CANMSG;   // State of Charge
+
+      // Grab AMS fault light
+      if(can_recv_msg[0] == 0xFF) {
+          gFlag |= _BV(AMS_LIGHT);
+      } else {
+          gFlag &= ~_BV(AMS_LIGHT);
+      }
+
+      // Grab temp, voltage, and current
+      curr_volt = can_recv_msg[3];
+      curr_temp = can_recv_msg[2];
+      curr_current = can_recv_msg[4];
+      curr_SoC = can_recv_msg[5];
+
 
       // If AMS shutdown is true, make AMS_PIN high
 
@@ -133,7 +161,13 @@ ISR(CAN_INT_vect) {
       can_recv_msg[4] = CANMSG;   // BMS status
       can_recv_msg[5] = CANMSG;   // IMD status
 
-      // If AMS shutdown is true, make AMS_PIN high
+      // Grab IMD status
+      if(can_recv_msg[5] == 0xFF) {
+          gFlag |= _BV(IMD_STATUS);
+      } else {
+          gFlag &= ~_BV(IMD_STATUS);
+      }
+
 
       // If IMD shutdown is true, make IMD_PIN high (if IMD goes low within 2 seconds of car on)
       // make sure these latch (don't turn off until board is turned off)
@@ -174,22 +208,59 @@ void initTimer(void) {
     OCR0A = 0xFF;
 }
 
+void initIO(void) {
+    /* Initialize all inputs and outputs and interrupts */
+    sei();                  // Enable Interrupts
+
+    DDRB |= _BV(LED1_PIN) | _BV(EXT_LED_ORANGE) | _BV(EXT_LED_GREEN) | _BV(AMS_PIN) | _BV(IMD_PIN);
+
+
+    /* Setup interrupt registers */
+    PCICR |= _BV(PCIE0);
+    PCMSK0 |= _BV(PCINT2);
+
+    /*----- Setup PWM output -----*/
+    //Output compare pin is OC1B, so we need OCR1B as our counter
+    TCCR1B |= _BV(CS00); //Clock prescale set to max speed
+    TCCR1B |= _BV(WGM12);
+    TCCR1A |= _BV(COM1B1) | _BV(WGM10); // Fast PWM 8-bit mode
+    TCCR1A &= ~_BV(COM1B0); // Set on match, clear on top
+    DDRD |= _BV(PD2); //Enable output pin
+    DDRD |= _BV(PD3); //Enable output pin
+
+    OCR1A = (uint8_t) 200;      // Duty Cycle
+}
+
 void checkShutdownState(void)   {
     /*
     -Check if bits are set
         -IF they are, set CAN list position to 0xFF
         -ELSE do set CAN list position to 0x00
     */
+    // Check Start Button
+    if(bit_is_set(gFlag, STATUS_START)) {
+        gCAN_MSG[CAN_START_BUTTON] = 0xFF;
+    } else {
+        gCAN_MSG[CAN_START_BUTTON] = 0x00;
+    }
 }
 
 void updateStateFromFlags(void) {
     /*
     Based off the state of the flag(s), update components and send CAN
     */
-    if(bit_is_set(gFlag, STATUS_START)) {
-        gCAN_MSG[CAN_START_BUTTON] = 0xFF;
+    // Check AMS light
+    if(!(bit_is_set(gFlag, AMS_LIGHT))) {
+        PORT_AMS |= _BV(AMS_PIN);
     } else {
-        gCAN_MSG[CAN_START_BUTTON] = 0x00;
+        PORT_AMS &= ~_BV(AMS_PIN);
+    }
+
+    // Check IMD light
+    if(!(bit_is_set(gFlag, IMD_STATUS))) {
+        PORT_IMD |= _BV(IMD_PIN);
+    } else {
+        PORT_IMD &= ~_BV(IMD_PIN);
     }
 }
 
@@ -206,15 +277,7 @@ int main(void){
     -Infinite loop checking shutdown state!
     */
 
-    sei();                  // Enable Interrupts
-
-    DDRB |= _BV(LED1_PIN) | _BV(EXT_LED_ORANGE) | _BV(EXT_LED_GREEN);
-
-
-    /* Setup interrupt registers */
-    PCICR |= _BV(PCIE0);
-    PCMSK0 |= _BV(PCINT2);
-
+    initIO();                           // Initialize I/O
 
     // CAN Enable
     CAN_init(CAN_ENABLED);
@@ -222,8 +285,7 @@ int main(void){
     CAN_wait_on_receive(BMS_MBOX, CAN_ID_BMS_MASTER, CAN_LEN_BMS_MASTER, CAN_IDM_single);
     CAN_wait_on_receive(AIR_MBOX, CAN_ID_AIR_CONTROL, CAN_LEN_AIR_CONTROL, CAN_IDM_single);
 
-    initTimer();
-
+    initTimer();                        // Initialize Timer
     gFlag |= _BV(UPDATE_STATUS);        // Read ports
 
     while(1) {
@@ -231,23 +293,21 @@ int main(void){
             PORT_EXT_LED_ORANGE ^= _BV(EXT_LED_ORANGE);     // Blink Orange LED for timing check
             PORT_LED1 ^= _BV(LED1_PIN);
 
-            // updateStateFromFlags();
+            updateStateFromFlags();
+            checkShutdownState();
+
+            OCR1A = curr_SoC;       // Update current State of Charge
 
 
-            // if(bit_is_set(gFlag, BRAKE_PRESSED) && bit_is_set(gFlag, TSMS_CLOSED)) {
-            //     CAN_transmit(0, CAN_ID_DASHBOARD, CAN_LEN_DASHBOARD, gCAN_MSG);
-            // }
+            if(bit_is_set(gFlag, BRAKE_PRESSED) && bit_is_set(gFlag, TSMS_CLOSED)) {
+                CAN_transmit(0, CAN_ID_DASHBOARD, CAN_LEN_DASHBOARD, gCAN_MSG);
+            }
+
+
             if(bit_is_set(gFlag, TSMS_CLOSED)) {
                 PORT_EXT_LED_GREEN ^= _BV(EXT_LED_GREEN);
             }
             gFlag &= ~_BV(UPDATE_STATUS);  // Clear Flag
-        }
-
-        // Do continuously for now
-        updateStateFromFlags();
-
-        if(bit_is_set(gFlag, BRAKE_PRESSED) && bit_is_set(gFlag, TSMS_CLOSED)) {
-            CAN_transmit(0, CAN_ID_DASHBOARD, CAN_LEN_DASHBOARD, gCAN_MSG);
         }
     }
 }
