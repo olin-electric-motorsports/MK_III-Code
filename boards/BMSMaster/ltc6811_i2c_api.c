@@ -1,12 +1,13 @@
 /*
 Header:
-    Describe what it does.
+    This file abstracts the isoSPI transaction required to set the LTC68XX COMM
+    registers in order that the LTC68XX devices will send a certain I2C message
 Author:
     @author Peter Seger & Alexander Hoppe
 */
 
 
-#include "i2c_api.h"
+#include "ltc6811_i2c_api.h"
 
 
 
@@ -52,8 +53,8 @@ void write_i2c(uint8_t total_ic, uint8_t address, uint8_t command, uint8_t *data
         }
     }
 
-    wrcomm(total_ic, comm);
-    stcomm();
+    _wrcomm(total_ic, comm);
+    _stcomm();
 
     transmitted_bytes = 0;
     for (uint8_t i = 0; i < loop_count; i++) {
@@ -78,8 +79,8 @@ void write_i2c(uint8_t total_ic, uint8_t address, uint8_t command, uint8_t *data
                     comm[i][j] = comm[0][j];
                 }
             }
-            wrcomm(1, comm);
-            stcomm();
+            _wrcomm(1, comm);
+            _stcomm();
         } else {
             for (uint8_t k = 0; k < 3; k++) {
                 comm[0][k * 2] = BLANK + (data[data_counter] >> 4);
@@ -97,13 +98,13 @@ void write_i2c(uint8_t total_ic, uint8_t address, uint8_t command, uint8_t *data
                     comm[i][j] = comm[0][j];
                 }
             }
-            wrcomm(1, comm);
-            stcomm();
+            _wrcomm(1, comm);
+            _stcomm();
         }
     }
 }
 
-void wrcomm(uint8_t total_ic, //The number of ICs being written to
+void _wrcomm(uint8_t total_ic, //The number of ICs being written to
         uint8_t comm[][6] //A two dimesional array of the comm data that will be written
     )
 {
@@ -143,7 +144,7 @@ void wrcomm(uint8_t total_ic, //The number of ICs being written to
     free(cmd);
 }
 
-void stcomm(void) {
+void _stcomm(void) {
     /* This function shifts data in COMM register out over ltc6811 SPI/I2C port */
     uint8_t cmd[4];
     uint16_t cmd_pec;
@@ -162,7 +163,7 @@ void stcomm(void) {
     PORTB |= _BV(PB4);
 }
 
-int8_t rdcomm(uint8_t total_ic, //Number of ICs in the system
+int8_t _rdcomm(uint8_t total_ic, //Number of ICs in the system
         uint8_t r_comm[][8] //A two dimensional array that function stores the read configuration data
     )
 {
