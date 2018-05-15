@@ -2,7 +2,7 @@
 #include "BMSMaster.h"
 #include "LTC_defs.h"
 #include <stdlib.h>
-#include "spi_api.h"
+#include "m16m1_spi_api.h"
 
 
 const uint16_t OV_THRESHOLD = 36000;//35900; // Over voltage threshold ADC Code. LSB = 0.0001

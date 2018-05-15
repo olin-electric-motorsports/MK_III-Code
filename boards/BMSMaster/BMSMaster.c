@@ -17,10 +17,9 @@ Author:
 
 #include "BMSMaster.h"
 #include "ltc6811_api.c"
-#include "ltc6804_api.c"
-#include "spi_api.c"
-#include "i2c_api.c"
-#include "crc15.c"
+#include "m16m1_spi_api.c"
+#include "ltc6811_i2c_api.c"
+#include "crc15.h"
 
 
 
@@ -33,7 +32,7 @@ const uint8_t ADC_CONVERSION_MODE = MD_7KHZ_3KHZ;
 const uint8_t ADC_DCP = DCP_DISABLED;
 const uint8_t CELL_CH_TO_CONVERT = CELL_CH_ALL;
 const uint8_t AUX_CH_TO_CONVERT = AUX_CH_ALL;
-const uint8_t STAT_CH_TO_CONVERT STAT_CH_ALL;
+const uint8_t STAT_CH_TO_CONVERT = STAT_CH_ALL;
 
 /* Over and Under Voltage Thresholds */
 const uint16_t OV_THRESHOLD = 36000;

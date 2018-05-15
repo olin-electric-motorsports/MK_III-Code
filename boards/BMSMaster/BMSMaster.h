@@ -1,3 +1,6 @@
+#ifndef BMS_MASTER_H
+#define BMS_MASTER_H
+
 #include <stdio.h>
 #include <string.h>
 #include <avr/io.h>
@@ -98,3 +101,5 @@ void mux_disable(uint8_t total_ic, uint8_t i2c_address);
 /* Register Configuration for Communication with LTC6804 */
 uint8_t tx_cfg[TOTAL_IC][6];
 uint8_t rx_cfg[TOTAL_IC][6];
+
+#endif

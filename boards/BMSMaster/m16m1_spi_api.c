@@ -1,11 +1,12 @@
 /*
 Header:
-    Describe what it does.
+    Abstraction library for ATmega16m1 SPI communication, used here for sending
+    SPI data to the LTC6820 SPI to isoSPI converter.
 Author:
     @author Peter Seger & Alexander Hoppe
 */
 
-#include "spi_api.h"
+#include "m16m1_spi_api.h"
 
 
 
