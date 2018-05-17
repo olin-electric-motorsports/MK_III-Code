@@ -2,6 +2,7 @@
 Header:
     Main functionality for the battery management system (BMS) for the MKIII accumulator system.
 Author:
+    @author Alex Hoppe
     @author Peter Seger
 */
 
@@ -26,10 +27,11 @@ Author:
 
 
 /*----- Global Variables -----*/
-/* ADC Command Configurations */    //TODO change -->
+/* LTC6804 Command Configurations */
 const uint8_t ADC_OPT = ADC_OPT_DISABLED;
 const uint8_t ADC_CONVERSION_MODE = MD_7KHZ_3KHZ;
 const uint8_t ADC_DCP = DCP_DISABLED;
+
 const uint8_t CELL_CH_TO_CONVERT = CELL_CH_ALL;
 const uint8_t AUX_CH_TO_CONVERT = AUX_CH_ALL;
 const uint8_t STAT_CH_TO_CONVERT = STAT_CH_ALL;
@@ -40,8 +42,8 @@ const uint16_t SOFT_OV_THRESHOLD = 36200;
 const uint16_t UV_THRESHOLD = 22000;
 
 /* Thermistor Voltage */
-const uint16_t THERM_VOLTAGE_FRACTION = 3807 //TODO change -->
-
+//Thermistor voltage times this number must be greater than measured bus voltage (times 1000 for AVR)
+const uint16_t THERM_VOLTAGE_FRACTION = 3807; //Maximum fraction is 99/26 = 3.807 (1% top thermistors, therm 26K at 58 C)
 
 
 
@@ -67,9 +69,8 @@ uint8_t timer_counter;
 ISR(CAN_INT_vect) {
     // Check first board (AIR Control)
     CANPAGE = (0 << MOBNB0);
-    // TODO how to chose which message to grab?
-    if(bit_is_set(CANSTMOB, RXOK)) {  //DEBUG what goes
-        volatile uint8_t msg = CANSMG;      //grab the first byte of the CAN message
+    if(bit_is_set(CANSTMOB, RXOK)) {
+        volatile uint8_t msg = CANMSG;      //grab the first byte of the CAN message
         msg = CANMSG;
         can_recv_msg[0] = msg;
         can_recv_msg[1] = 0x99;
@@ -82,10 +83,10 @@ ISR(CAN_INT_vect) {
 
         //Setup to Receive Again
         CANSTMOB = 0x00;
-        CAN_wait_on_receive(0, CAN_ID_AIR_CONTROL, CAN_LEN_AIR_CONTROL, 0xFF);  //TODO change!
+        CAN_wait_on_receive(0, CAN_ID_AIR_CONTROL, CAN_LEN_AIR_CONTROL, 0xFF);  //TODO: change!
     }
 
-    //Check for BMS open Relay      TODO figure out
+    //Check for BMS open Relay      TODO: figure out
     CANPAGE = (4 << MOBNB0);
     if(bit_is_set(CANSTMOB, RXOK)) {
         volatile uint8_t msg = CANMSG;
@@ -96,11 +97,12 @@ ISR(CAN_INT_vect) {
 
         //Setup to Receive Again
         CANSTMOB = 0x00;
-        CAN_wait_on_receive(4, CAN_ID_AIR_CONTROL, CAN_LEN_AIR_CONTROL, 0xFF);     //TODO change!
+        CAN_wait_on_receive(4, CAN_ID_AIR_CONTROL, CAN_LEN_AIR_CONTROL, 0xFF);     //TODO: change!
     }
 }
 
-ISR(PCINT0_vect) { //TODO change!
+/* Pin change interrupt for last year's BSPD current comparator */
+ISR(PCINT0_vect) { //TODO: Set this flag based on this year's current measurement
     if(bit_is_set(PORT, PIN)){
         gFlag |= BSPD_CURRENT;
     } else {
@@ -108,11 +110,12 @@ ISR(PCINT0_vect) { //TODO change!
     }
 }
 
+/* Timer interrupt on Timer0 */
 ISR(TIMER0_COMPA_vect) {
-    // Only send CAN msgs every 50 cycles
+    // Only send read values and send CAN messages every X cycles
     if( clock_prescale >= 50 ) {
         gFlag |= READ_VALS_FLAG;
-        timer_counter = 0;
+        clock_prescale = 0;
     }
     clock_prescale++;
 }
@@ -126,16 +129,16 @@ void init_read_timer(void) {
     TCCR0B |= _BV(CS12) | _BV(WGM12);   // Set prescaler to 1/1024
 
     TIMSK0 |= _BV(OCIE0A);  // Enable CTC compare match
-    OCR0A  |= 0xFF;         // Timer compare value
+    OCR0A  |= 0xFF;         // Timer compare value = 255
 }
 
-void init_fan_pwm(uint8_t duty_cycle) {     //TODO change compare pins
+void init_fan_pwm(uint8_t duty_cycle) {     //TODO: change fan output compare pins
     //Output compare pin is OC1B, so we need OCR1B as our counter
     TCCR1B |= _BV(CS00);                    // Clock prescale set to max speed
     TCCR1B |= _BV(WGM12);
     TCCR1A |= _BV(COM1B1) | _BV(WGM10);     // Fast PWM 8-bit mode
     TCCR1A &= ~_BV(COM1B0);                 // Set on match, clear on top
-    DDRC   |= _BV(FAN_PIN);                 // Enable fan pin
+    FAN_PORT |= _BV(FAN_PIN);
 
     OCR1B = (uint8_t)(duty_cycle);
 }
@@ -157,12 +160,12 @@ uint8_t read_all_voltages(void) {
             uint8_t comp = cell_codes[i][j];
             // Test for overvoltage
             if (comp > OV_THRESHOLD) {
-                gFlags |= OVER_VOLTAGE;
+                gFlag |= OVER_VOLTAGE;
                 error += 1;
             }
             // Test for soft overvoltage threshold
             if (comp > SOFT_OV_THRESHOLD) {
-                gFLAG |= SOFT_OVER_VOLTAGE;
+                gFlag |= SOFT_OVER_VOLTAGE;
 
                 // Check AIRs
                 if (gRelayFlag & AIRS_CLOSED) {
@@ -171,14 +174,14 @@ uint8_t read_all_voltages(void) {
             }
             // Test for undervoltage
             if (comp < UV_THRESHOLD) {
-                gFLAG |= UNDER_VOLTAGE;
+                gFlag |= UNDER_VOLTAGE;
                 error += 1;
             }
         }
     }
     // Upon successful execution, clear flags
     if (error == 0) {
-        gFLAG &= ~(OVER_VOLTAGE | UNDER_VOLTAGE);
+        gFlag &= ~(OVER_VOLTAGE | UNDER_VOLTAGE);
     }
 
     return error;
@@ -187,39 +190,40 @@ uint8_t read_all_voltages(void) {
 
 /*----- Read Temperatures -----*/
 uint8_t read_all_temperatures(void) {
-    // Start thermistor ADC measurement
-    uint8_t error = 0;
-    // Iterate through first MUX
+// Start thermistor ADC measurement
+    uint8_t cells_over_temp = 0;      // counter for number of cells over temp
+// Iterate through bottom MUX
     mux_disable(TOTAL_IC, MUX_2_ADDRESS);
     for (uint8_t i = 0; i < MUX_CHANNELS; i++) {
         set_mux_channel(TOTAL_IC, MUX_1_ADDRESS, i);
 
         o_ltc6811_adax(MD_7KHZ_3KHZ, AUX_CH_ALL);   // Start ADC measurement
         o_ltc6811_pollAdc();    // Wait on ADC measurement
-        error = o_ltc6811_rdaux(0, TOTAL_IC, aux_codes);    // Parse ADC measurements
+        cells_over_temp = o_ltc6811_rdaux(0, TOTAL_IC, aux_codes);    // Parse ADC measurements
 
         // Iterate through all cells
         for (uint8_t j = 0; j < TOTAL_IC; j++) {
-            cell_temperatures[j][i*2] = aux_codes[j]0]; // Store temps
+            cell_temperatures[j][i*2] = aux_codes[j][0]; // Store temps
             uint32_t _cell_temp_mult = (uint32_t)(aux_codes[j][0]) * THERM_VOLTAGE_FRACTION;
             uint32_t _cell_ref_mult = (uint32_t)(aux_codes[j][5]) * 1000;
             // Check for over temperature
             if (_cell_temp_mult < _cell_ref_mult) {
-                gFLAG |= OVER_TEMP;
-                error += 1;
+                gFlag |= OVER_TEMP;
+                cells_over_temp += 1;
             }
         }
     }
     mux_disable(TOTAL_IC, MUX_1_ADDRESS);
 
-    // Iterate through second MUX
+    // Iterate through top MUX
     for (uint8_t i = 0; i < MUX_CHANNELS; i++) {
         set_mux_channel(TOTAL_IC, MUX_2_ADDRESS, i);
 
         o_ltc6811_adax(MD_7KHZ_3KHZ, AUX_CH_ALL);   // Start ADC measurement
         o_ltc6811_pollAdc();    // Wait on ADC measurement
-        eror = o_ltc6811_rdaux(0, TOTAL_IC, aux_codes);     // Parse ADC measurements
+        cells_over_temp = o_ltc6811_rdaux(0, TOTAL_IC, aux_codes);     // Parse ADC measurements
 
+        // TODO: Test if this is still the case
         // Ignore thermistor that is shorted low
         if (i == 5) {
             aux_codes[3][0] = aux_codes[3][5] - 1;
@@ -227,22 +231,22 @@ uint8_t read_all_temperatures(void) {
 
         // Iterate through all cells
         for(uint8_t j = 0; j < TOTAL_IC; j++) {
-            cell_temperatures[j][i*2 + 1] = aux_codes[j][0] // Store temps
+            cell_temperatures[j][i*2 + 1] = aux_codes[j][0]; // Store temps from received array to cell temps array
             uint32_t _cell_temp_mult = (uint32_t)(aux_codes[j][0]) * THERM_VOLTAGE_FRACTION;
             uint32_t _cell_ref_mult = (uint32_t)(aux_codes[j][5]) * 1000;
             // Check for over temperautre
             if (_cell_temp_mult < _cell_ref_mult) {
-                gFLAG |= OVER_TEMP;
-                error += 1;
+                gFlag |= OVER_TEMP;
+                cells_over_temp += 1;
             }
         }
     }
 
     // Upon successful completeion, clear flags
-    if (error == 0) {
-        gFLAG &= ~OVER_TEMP;
+    if (cells_over_temp == 0) {
+        gFlag &= ~OVER_TEMP;
     }
-    return error;
+    return cells_over_temp;
 }
 
 
@@ -251,7 +255,7 @@ void transmit_voltages(void) {
     uint8_t msg[8];
     // Iterate over all ICs
     for (uint8_t i = 0; i < TOTAL_IC; i++) {
-        msg0] = i; //segment
+        msg[0] = i; //segment
         // 4 messages per IC
         for (uint8_t j = 0; j < 4; j++) {
             uint8_t index = j*3;
@@ -277,7 +281,7 @@ void transmit_temperatures(void) {
         // 6 messages per cell
         for (uint8_t j = 0; j < 6; j++) {
             uint8_t index = j*2;
-            msg[1] = idx;
+            msg[1] = index;
             // 2 cells per message
             for ( uint8_t k = 0; k < 2; k++) {
                 uint16_t cell_temp = cell_temperatures[i][index + k];
@@ -300,9 +304,9 @@ void transmit_discharge_status(void) {
         msg[0] = i;
         // 3 ICs per message
         for (uint8_t j = 0; j < 3; j++) {
-            uint16_t status = discharge_status[(i*3) + k];
-            msg[1 + k*2] = (uint8_t)(status >> 8); // Higher half
-            msg[2 + k*2] = (uint8_t)(status); // Lower half
+            uint16_t status = discharge_status[(i*3) + j];
+            msg[1 + j*2] = (uint8_t)(status >> 8); // Higher half
+            msg[2 + j*2] = (uint8_t)(status); // Lower half
         }
 
         CAN_transmit(3, CAN_ID_BMS_DISCHARGE, CAN_LEN_BMS_DISCHARGE, msg);
@@ -355,6 +359,7 @@ int main(void){
     sei();      // enable interrupts
 
     // I/O
+    // TODO: Update board LEDs and RJ45 LEDs
     DDRB |= _BV(LED_1) | _BV(LED_2) | _BV(LED_3); // Internal LEDs
     DDRC |= _BV(RJ45_LED_GREEN) | _BV(RJ45_LED_ORANGE); // External LEDs
 
@@ -362,7 +367,7 @@ int main(void){
     RELAY_PORT |= _BV(RELAY_PIN);
 
     // Setup Interrupts
-    PCICR |= _BV(PCIE0); // TODO change -->
+    PCICR |= _BV(PCIE0); // TODO: change -->
     PCMSK0 |= _BV(PCINT3);
 
     // LTC6804 Configuration
@@ -371,7 +376,7 @@ int main(void){
     // CAN Initialization
     CAN_init(CAN_ENABLED);
     CAN_wait_on_receive(0, CAN_ID_AIR_CONTROL, CAN_LEN_AIR_CONTROL, 0xFF);
-    CAN_wait_on_receive(4, CAN_ID_BMS_DISCHARGE, CAN_LEN_BMS_DISCHARGE, 0xFF);
+    CAN_wait_on_receive(4, CAN_ID_PANIC, CAN_LEN_PANIC, 0xFF);
 
     // Initialization Timer
     init_read_timer();
@@ -380,12 +385,12 @@ int main(void){
     init_fan_pwm(0x20);
 
     // Initialize Watchdog
-    watchdog_enable(WDTO_8S);
+    wdt_enable(WDTO_8S);
 
     // Initialize SPI
     init_spi();
 
-    // Slave Select TODO wtf?
+    // Slave Select TODO: wtf?
     DDRD |= _BV(PD3);
     PORTD |= _BV(PD3);
     PORTB |= _BV(PB4);
@@ -426,7 +431,7 @@ int main(void){
             RJ45_ORANGE_PORT &= _BV(RJ45_LED_ORANGE);
         }
 
-        if(can_recv_msg[1] == 0x99) {   // TODO What is going on here?
+        if(can_recv_msg[1] == 0x99) {   // TODO: What is going on here?
             RJ45_GREEN_PORT ^= _BV(RJ45_LED_GREEN);
             uint8_t voltage_error = 0;                      // Track error accumulation
             uint8_t temperature_error = 0;                  // Track error accumulation
@@ -438,12 +443,6 @@ int main(void){
             transmit_voltages();
             transmit_temperatures();
             transmit_discharge_status();
-        }
-
-        if(bit_is_set(IMD_SENSE_PORT, IMD_SENSE_PIN)) {
-            gFlag |= IMD_TRIPPED;
-        } else {
-            gFlag &= ~IMD_TRIPPED;
         }
 
         wdt_reset();

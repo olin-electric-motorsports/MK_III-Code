@@ -192,7 +192,7 @@ int8_t _rdcomm(uint8_t total_ic, //Number of ICs in the system
     // Iterate through each ltc6811 in the daisy chain and back its data into r_comm
     for (uint8_t current_ic = 0; current_ic < total_ic; current_ic++) {
         // Iterate through all the bytes in the register
-        for (unit8_t current_byte = 0; current_byte < BYTES_IN_REG; current_byte++) {
+        for (uint8_t current_byte = 0; current_byte < BYTES_IN_REG; current_byte++) {
             r_comm[current_ic][current_byte] = rx_data[current_byte + (current_ic * BYTES_IN_REG)];
         }
         received_pec = (r_comm[current_ic][6] << 8) + r_comm[current_ic][7];

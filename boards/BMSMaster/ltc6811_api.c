@@ -176,7 +176,7 @@ void o_ltc6811_adcv(uint8_t MD, //ADC Mode
 
 uint8_t o_ltc6811_rdcv(uint8_t reg, // Controls which cell voltage regulator is read back,
         uint8_t total_ic,   // Number of ICs in the system
-        uint8_t cell_codes[][CELL_CHANNELS] // Array of the parsed cell codes
+        uint16_t cell_codes[][CELL_CHANNELS] // Array of the parsed cell codes
     )
 {
     /* This function reads and parses the ltc6811 cell voltage registers */
@@ -282,6 +282,32 @@ void o_ltc6811_rdcv_reg(uint8_t reg, //Determines which cell voltage register is
     PORTB |= _BV(PB4);      // Set CS high
 }
 
+//Start a GPIO and Vref2 Conversion
+void o_ltc6811_adax(
+        uint8_t MD, //ADC Mode
+        uint8_t CHG //GPIO Channels to be measured)
+    )
+{
+    uint8_t cmd[4];
+    uint16_t cmd_pec;
+    uint8_t md_bits;
+
+    md_bits = (MD & 0x02) >> 1;
+    cmd[0] = md_bits + 0x04;
+    md_bits = (MD & 0x01) << 7;
+    cmd[1] = md_bits + 0x60 + CHG ;
+
+    cmd_pec = pec15_calc(2, cmd);
+    cmd[2] = (uint8_t)(cmd_pec >> 8);
+    cmd[3] = (uint8_t)(cmd_pec);
+
+    //wakeup_idle (); //This will guarantee that the ltc6811 isoSPI port is awake. This command can be removed.
+    PORTB &= ~_BV(PB4); //set CS low
+    spi_write_array(cmd,4);
+    PORTB |= _BV(PB4); //set CS low
+
+}
+
 int8_t o_ltc6811_rdaux(uint8_t reg, //Determines with GPIO voltage register is read back
         uint8_t total_ic, //The number of ICs in the system
         uint16_t aux_codes[][AUX_CHANNELS] //A two dimensional array of the GPIO voltage codes
@@ -329,7 +355,7 @@ int8_t o_ltc6811_rdaux(uint8_t reg, //Determines with GPIO voltage register is r
     } else {
         o_ltc6811_rdaux_reg(reg, total_ic, data);
         // Iterate through every ltc6811 in the daisy chain
-        for (int current_ic = 0; current_ic < total_ic; current_ic) {
+        for (int current_ic = 0; current_ic < total_ic; current_ic++) {
             // Parse the read back data for each aux voltage in the register
             for (int current_gpio = 0; current_gpio < GPIO_IN_REG; current_gpio++) {
                 parsed_aux = (data[data_counter] + (data[data_counter + 1] << 8));
@@ -365,7 +391,7 @@ void o_ltc6811_rdaux_reg(uint8_t reg, //Determines which GPIO voltage register i
     if (reg == 1) {     // Read back auxiliary group A
         cmd[0] = 0x00;
         cmd[1] = 0x0C;
-    } else if reg == 2) {       // Read back auxiliary group B
+    } else if (reg == 2) {       // Read back auxiliary group B
         cmd[0] = 0x00;
         cmd[1] = 0x0e;
     } else if (reg == 3) {      // Read back auxiliary group B

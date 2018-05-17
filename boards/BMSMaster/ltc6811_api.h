@@ -2,6 +2,7 @@
 #define LTC6811_API_H
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <avr/io.h>
 #include <avr/interrupt.h>
@@ -31,11 +32,15 @@ void o_ltc6811_adcv(uint8_t MD, //ADC Mode
     );
 uint8_t o_ltc6811_rdcv(uint8_t reg, // Controls which cell voltage regulator is read back,
         uint8_t total_ic,   // Number of ICs in the system
-        uint8_t cell_codes[][CELL_CHANNELS] // Array of the parsed cell codes
+        uint16_t cell_codes[][CELL_CHANNELS] // Array of the parsed cell codes
     );
 void o_ltc6811_rdcv_reg(uint8_t reg, //Determines which cell voltage register is read back
             uint8_t total_ic, //Number of ICs in the array
             uint8_t *data //An array of the unparsed cell codes
+    );
+void o_ltc6811_adax(
+        uint8_t MD, //ADC Mode
+        uint8_t CHG //GPIO Channels to be measured)
     );
 int8_t o_ltc6811_rdaux(uint8_t reg, //Determines with GPIO voltage register is read back
         uint8_t total_ic, //The number of ICs in the system

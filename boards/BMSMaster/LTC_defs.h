@@ -40,4 +40,7 @@
 #define PULL_UP_CURRENT 1
 #define PULL_DOWN_CURRENT 0
 
+extern const uint16_t UV_THRESHOLD;
+extern const uint16_t OV_THRESHOLD;
+extern const uint8_t ADC_OPT;
 #endif
