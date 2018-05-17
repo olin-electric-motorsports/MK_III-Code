@@ -243,7 +243,7 @@ ISR(TIMER0_COMPA_vect) {
     if(bit_is_set(gFlag,FLAG_THROTTLE_10)){
         imp_error++;
         // 4Mhz *.1 = 400,000 cycles
-        if(imp_error > 400000){
+        if(imp_error > 4){
             gFlag |= _BV(FLAG_PANIC);
         }
     } else {
@@ -317,6 +317,7 @@ void updateStateFromFlags(void) {
     if(bit_is_set(gFlag,FLAG_PANIC)){
         gThrottle[0] = 0x00;
         gThrottle[1] = 0x00;
+        EXT_LED_PORT ^= _BV(EXT_LED2);
         //DO MORE
     }
 
@@ -451,6 +452,11 @@ void mapAndStoreThrottle(void){
     // do the math necessary to accomodate for the amplification
     uint32_t throttle1 = gThrottle16[0];
     uint32_t throttle2 = gThrottle16[1];
+
+    if(throttle1 > 700 || throttle2 > 700){
+        gFlags |= _BV(FLAG_PANIC);
+        return
+    }
 
     // Adjust for amplification
     uint8_t throttle1_centered = throttle1 >> 2;
@@ -607,7 +613,7 @@ void sendCanMessages(int viewCan){
     }
 
 
-    EXT_LED_PORT ^= _BV(EXT_LED2);
+    // EXT_LED_PORT ^= _BV(EXT_LED2);
 }
 
 
