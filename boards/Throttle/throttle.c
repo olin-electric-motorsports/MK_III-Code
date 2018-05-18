@@ -74,8 +74,8 @@ Author:
 #define MOB_AIR_CONTROL         1
 #define MOB_DASHBOARD           2
 
-#define MOB_BROADCAST           0
-#define MOB_MOTORCONTROLLER     1
+#define MOB_BROADCAST           3
+#define MOB_MOTORCONTROLLER     4
 
 // for gTimerFlag
 #define UPDATE_STATUS           0
@@ -130,7 +130,7 @@ uint16_t throttle_10_count = 0x00;
 uint8_t clock_prescale = 0x00;
 uint8_t timer_counter = 0x00;
 uint32_t imp_error = 0x00;
-
+int buzzerSet = 0;
 
 /*----- Interrupt(s) -----*/
 // *pg 76 of datasheet*
@@ -243,7 +243,7 @@ ISR(TIMER0_COMPA_vect) {
     if(bit_is_set(gFlag,FLAG_THROTTLE_10)){
         imp_error++;
         // 4Mhz *.1 = 400,000 cycles
-        if(imp_error > 400000){
+        if(imp_error > 4){
             gFlag |= _BV(FLAG_PANIC);
         }
     } else {
@@ -306,10 +306,11 @@ void updateStateFromFlags(void) {
     */
 
     //Based off of ready to drive sound rules (pg113)
-    if(bit_is_set(gFlag,FLAG_MOTOR_ON)){
+    if(bit_is_set(gFlag,FLAG_MOTOR_ON) && buzzerSet == 0){
         RTD_PORT |= _BV(RTD_LD);
         _delay_ms(2000);
         RTD_PORT &= ~(_BV(RTD_LD));
+        buzzerSet = 1;
     } else {
         RTD_PORT &= ~_BV(RTD_LD);
     }
@@ -317,6 +318,10 @@ void updateStateFromFlags(void) {
     if(bit_is_set(gFlag,FLAG_PANIC)){
         gThrottle[0] = 0x00;
         gThrottle[1] = 0x00;
+        LED1_PORT |= _BV(LED1);
+        LED2_PORT |= _BV(LED2);
+        LED3_PORT |= _BV(LED3);
+
         //DO MORE
     }
 
@@ -452,6 +457,11 @@ void mapAndStoreThrottle(void){
     uint32_t throttle1 = gThrottle16[0];
     uint32_t throttle2 = gThrottle16[1];
 
+    if(throttle1 > 900 || throttle2 > 900){
+        gFlag |= _BV(FLAG_PANIC);
+        return;
+    }
+
     // Adjust for amplification
     uint8_t throttle1_centered = throttle1 >> 2;
     uint8_t throttle2_centered = ((throttle2 * 100)/122) >> 2;
@@ -529,14 +539,14 @@ void mapAndStoreThrottle(void){
     // LOG_println(disp_string,strlen(disp_string));
 
     // Check if they are within 10%
-    uint8_t err = 0;
+    // uint8_t err = 0;
     if (throttle1_mapped > throttle2_mapped && (throttle1_mapped - throttle2_mapped) >= (0xFF/10)) {
-        err = 1;
+        // err = 1;
         throttle_10_count++;
         gFlag |= _BV(FLAG_THROTTLE_10);
     }
     else if (throttle2_mapped > throttle1_mapped && (throttle2_mapped - throttle1_mapped) >= (0xFF/10)) {
-        err = 1;
+        // err = 1;
         throttle_10_count++;
         gFlag |= _BV(FLAG_THROTTLE_10);
     } else {
@@ -544,10 +554,10 @@ void mapAndStoreThrottle(void){
     }
 
     // Oops we got an error
-    if (err) {
-        gFlag |= _BV(FLAG_PANIC);
-        return;
-    }
+    // if (err) {
+    //     gFlag |= _BV(FLAG_PANIC);
+    //     return;
+    // }
     if (bit_is_clear(gFlag, FLAG_BRAKE)) {
         gThrottle[0] = throttle1_mapped;
         gThrottle[1] = throttle2_mapped;
@@ -560,9 +570,9 @@ void mapAndStoreThrottle(void){
 
 void sendCanMessages(int viewCan){
 
-    if(bit_is_set(gFlag,FLAG_PANIC)) {
-        // return;
-    }
+    // if(bit_is_set(gFlag,FLAG_PANIC)) {
+    //     return;
+    // }
 
     gCANMessage[0] = gThrottle[0];
     gCANMessage[1] = gSteering;
@@ -624,6 +634,7 @@ int main(void){
     initADC();
     sei();
     LOG_init();
+    CAN_init(CAN_ENABLED);
 
     // Set interrupt registers
     PCICR |= _BV(PCIE0);
