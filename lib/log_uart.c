@@ -5,6 +5,8 @@
 uint8_t __LOG_UART_COMM;
 uint8_t __LOG_UART_DATA;
 
+char uart_buffer[1024]  ="";
+
 ISR(LIN_TC_vect) {
     // Check to see if we need the data
     if (bit_is_set(__LOG_UART_COMM, __LOG_NEED_DATA)) {
