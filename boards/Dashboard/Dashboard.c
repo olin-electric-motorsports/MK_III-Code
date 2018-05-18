@@ -271,8 +271,13 @@ void initIO(void) {
     TCCR1B |= _BV(WGM12);
     TCCR1B &= ~_BV(WGM13);
 
+<<<<<<< HEAD
     // OCR1A = (uint8_t) 30;      // Duty Cycle
     // OCR1B = (uint8_t) 255;      // Duty Cycle
+=======
+    OCR1A = (uint8_t) 70;      // Duty Cycle
+    OCR1B = (uint8_t) 200;      // Duty Cycle
+>>>>>>> dfc8a7ce0d46ffcc49fc3997a15d70ebcc71d5ee
 
 }
 
@@ -323,6 +328,12 @@ void initADC(void) {
     //This line is redundant. The timer
     ADMUX |= _BV(0x00);
 }
+<<<<<<< HEAD
+=======
+
+
+//TODO any other functionality goes here
+>>>>>>> dfc8a7ce0d46ffcc49fc3997a15d70ebcc71d5ee
 
 
 /*----- MAIN -----*/
@@ -360,9 +371,12 @@ int main(void){
             updateStateFromFlags();
             checkShutdownState();
 
+<<<<<<< HEAD
             OCR1B = charge;
             // OCR1A = throttle;
 
+=======
+>>>>>>> dfc8a7ce0d46ffcc49fc3997a15d70ebcc71d5ee
             // count++;
             // if(count > 5){
             //     if(OCR1A == 100){
