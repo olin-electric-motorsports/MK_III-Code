@@ -55,7 +55,7 @@
 
 #define ENABLED                 1
 #define DISABLED                0
-#define CELL_CHANNELS           12
+#define CELL_CHANNELS           10
 #define AUX_CHANNELS            6
 #define STAT_CHANNELS           4
 #define CELL                    1
@@ -74,12 +74,12 @@
  register reads and the array lengths must be based
  on the number of ICs on the stack
  ******************************************************/
-extern uint16_t cell_codes[TOTAL_IC][CELL_CHANNELS];
+extern uint16_t cell_voltages[TOTAL_IC][CELL_CHANNELS];
 /*!<
-  The cell codes will be stored in the cell_codes[][12] array in the following format:
-  |  cell_codes[0][0]| cell_codes[0][1] |  cell_codes[0][2]|    .....     |  cell_codes[0][11]|  cell_codes[1][0] | cell_codes[1][1]|  .....   |
-  |------------------|------------------|------------------|--------------|-------------------|-------------------|-----------------|----------|
-  |IC1 Cell 1        |IC1 Cell 2        |IC1 Cell 3        |    .....     |  IC1 Cell 12      |IC2 Cell 1         |IC2 Cell 2       | .....    |
+  The cell voltages will be stored in the cell_voltages[][10] array in the following format:
+  |  cell_voltages[0][0]| cell_voltages[0][1] |  cell_voltages[0][2]|    .....     |  cell_voltages[0][11]|  cell_voltages[1][0] | cell_voltages[1][1]|  .....   |
+  |---------------------|---------------------|---------------------|--------------|----------------------|----------------------|--------------------|----------|
+  |IC1 Cell 1           |IC1 Cell 2           |IC1 Cell 3           |    .....     |  IC1 Cell 10         |IC2 Cell 1            |IC2 Cell 2          | .....    |
  ****/
 
 extern uint16_t aux_codes[TOTAL_IC][AUX_CHANNELS];
@@ -92,10 +92,10 @@ extern uint16_t aux_codes[TOTAL_IC][AUX_CHANNELS];
 
 extern uint16_t cell_temperatures[TOTAL_IC][CELL_CHANNELS];
 /*!<
-  The cell temperatures will be stored in the cell_temperatures[][12] array in the following format:
+  The cell temperatures will be stored in the cell_temperatures[][10] array in the following format:
   |  cell_temperatures[0][0]| cell_temperatures[0][1] |  cell_temperatures[0][2]|    .....     |  cell_temperatures[0][11]|  cell_temperatures[1][0] | cell_temperatures[1][1]|  .....   |
   |-------------------------|-------------------------|-------------------------|--------------|--------------------------|--------------------------|------------------------|----------|
-  |IC1 Cell 1               |IC1 Cell 2               |IC1 Cell 3               |    .....     |  IC1 Cell 12             |IC2 Cell 1                |IC2 Cell 2              | .....    |
+  |IC1 Cell 1               |IC1 Cell 2               |IC1 Cell 3               |    .....     |  IC1 Cell 10             |IC2 Cell 1                |IC2 Cell 2              | .....    |
  ****/
 
 extern uint16_t discharge_status[TOTAL_IC];

@@ -11,6 +11,7 @@ Author:
 */
 
 #include "ltc6811_api.h"
+#include "BMSMaster.h"
 
 
 
@@ -176,7 +177,7 @@ void o_ltc6811_adcv(uint8_t MD, //ADC Mode
 
 uint8_t o_ltc6811_rdcv(uint8_t reg, // Controls which cell voltage regulator is read back,
         uint8_t total_ic,   // Number of ICs in the system
-        uint16_t cell_codes[][CELL_CHANNELS] // Array of the parsed cell codes
+        uint16_t cell_voltages[][CELL_CHANNELS] // Array of the parsed cell codes
     )
 {
     /* This function reads and parses the ltc6811 cell voltage registers */
@@ -197,13 +198,17 @@ uint8_t o_ltc6811_rdcv(uint8_t reg, // Controls which cell voltage regulator is 
         // Iterate through all ltc6811 voltage registers
         for (uint8_t cell_reg = 1; cell_reg < NUM_CV_REG+1; cell_reg++) {
             data_counter = 0;
+
+            sprintf(uart_buffer, "Reading single voltage register");
+            LOG_println(uart_buffer, strlen(uart_buffer));
+
             o_ltc6811_rdcv_reg(cell_reg, total_ic, cell_data);  // Reads a single cell voltage register
             // Interate through all ltc6811 in the daisy chain
             for (uint8_t current_ic = 0; current_ic < total_ic; current_ic++) {
                 // Parse read-back data once for each of the 3 voltage codes in register
                 for (uint8_t current_cell = 0; current_cell < CELL_IN_REG; current_cell++) {
                     parsed_cell = cell_data[data_counter] + (cell_data[data_counter + 1] << 8);
-                    cell_codes[current_ic][current_cell + ((cell_reg - 1) * CELL_IN_REG)] = parsed_cell;
+                    cell_voltages[current_ic][current_cell + ((cell_reg - 1) * CELL_IN_REG)] = parsed_cell;
                     data_counter = data_counter + 2;  // Increment by 2 since 2 cells codes were read for 1 cell
                 }
 
@@ -224,7 +229,7 @@ uint8_t o_ltc6811_rdcv(uint8_t reg, // Controls which cell voltage regulator is 
             // Parse read-back data once for each of the 3 voltage codes in register
             for (uint8_t current_cell = 0; current_cell < CELL_IN_REG; current_cell++) {
                 parsed_cell = cell_data[data_counter] + (cell_data[data_counter + 1] << 8);
-                cell_codes[current_ic][current_cell + ((reg -1) * CELL_IN_REG)] = 0x0000FFFF & parsed_cell;
+                cell_voltages[current_ic][current_cell + ((reg -1) * CELL_IN_REG)] = 0x0000FFFF & parsed_cell;
                 data_counter = data_counter + 2; // Increment by 2 since voltage codes are 2 bytes
             }
 

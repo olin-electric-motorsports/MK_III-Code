@@ -11,7 +11,7 @@
 #include "m16m1_spi_api.h"
 #include "LTC_defs.h"
 #include "crc15.h"
-
+#include "log_uart.h"
 
 
 
@@ -32,7 +32,7 @@ void o_ltc6811_adcv(uint8_t MD, //ADC Mode
     );
 uint8_t o_ltc6811_rdcv(uint8_t reg, // Controls which cell voltage regulator is read back,
         uint8_t total_ic,   // Number of ICs in the system
-        uint16_t cell_codes[][CELL_CHANNELS] // Array of the parsed cell codes
+        uint16_t cell_voltages[][CELL_CHANNELS] // Array of the parsed cell codes
     );
 void o_ltc6811_rdcv_reg(uint8_t reg, //Determines which cell voltage register is read back
             uint8_t total_ic, //Number of ICs in the array
