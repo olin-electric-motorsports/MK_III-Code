@@ -318,14 +318,10 @@ void updateStateFromFlags(void) {
     if(bit_is_set(gFlag,FLAG_PANIC)){
         gThrottle[0] = 0x00;
         gThrottle[1] = 0x00;
-<<<<<<< HEAD
         LED1_PORT |= _BV(LED1);
         LED2_PORT |= _BV(LED2);
         LED3_PORT |= _BV(LED3);
 
-=======
-        EXT_LED_PORT ^= _BV(EXT_LED2);
->>>>>>> dfc8a7ce0d46ffcc49fc3997a15d70ebcc71d5ee
         //DO MORE
     }
 
@@ -461,15 +457,9 @@ void mapAndStoreThrottle(void){
     uint32_t throttle1 = gThrottle16[0];
     uint32_t throttle2 = gThrottle16[1];
 
-<<<<<<< HEAD
     if(throttle1 > 900 || throttle2 > 900){
         gFlag |= _BV(FLAG_PANIC);
         return;
-=======
-    if(throttle1 > 700 || throttle2 > 700){
-        gFlags |= _BV(FLAG_PANIC);
-        return
->>>>>>> dfc8a7ce0d46ffcc49fc3997a15d70ebcc71d5ee
     }
 
     // Adjust for amplification
