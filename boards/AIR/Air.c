@@ -6,9 +6,8 @@ Author:
 */
 
 /*----- Includes -----*/
-// #define F_CPU(16000000UL)
-#include <stdio.h>
-#include <stdlib.io>
+
+#include <stdlib.h>
 #include <string.h>
 #include <avr/io.h>
 #include <avr/interrupt.h>
@@ -41,9 +40,10 @@ Author:
 #define AIR_Weld_Detect		        PC6
 
 // CAN Message Objects
-#define GLOBAL_SHUTDOWN             0x0
-#define BROADCAST_Mob	            0
-#define BMS_READ_Mob	            1
+
+#define MOB_BRAKE_LIGHT 0
+#define MOB_IMD_STATUS 1
+#define MOB_BROADCAST 2
 
 /*---- CAN Position Macros ----*/
 #define BMS                     0
@@ -67,17 +67,33 @@ Author:
 #define UPDATE_STATUS_FLAG     0
 #define AIR_plus_STATUS_FLAG   0
 
+/* MILLIS implementation definitions */
+#define clockCyclesPerMicrosecond ( F_CPU / 1000000L )
+#define clockCyclesToMicroseconds(X) ( ((X) * 1000L) / (F_CPU / 1000L) )
+#define MICROSECONDS_PER_TIMER0_OVERFLOW (clockCyclesToMicroseconds(64 * 256))
+// the whole number of milliseconds per timer0 overflow
+#define MILLIS_INC (MICROSECONDS_PER_TIMER0_OVERFLOW / 1000)
+// the fractional number of milliseconds per timer0 overflow. we shift right
+// by three to fit these numbers into a byte. (for the clock speeds we care
+// about - 8 and 16 MHz - this doesn't lose precision.)
+#define FRAC_INC ((MICROSECONDS_PER_TIMER0_OVERFLOW % 1000) >> 3)
+#define FRAC_MAX (1000 >> 3)
+
 
 volatile uint8_t gFlag = 0x00;
-volatile unsigned long timer0_millis = timer0_frac = timer0_overflow_num = 0;
+volatile unsigned long timer0_millis = 0;
+volatile unsigned long timer0_frac = 0;
+volatile unsigned long timer0_overflow_num = 0;
 volatile uint8_t clock_prescale = 0x00;
 volatile uint8_t gFlag2 = 0x01; // Timer Flag
 
+
 unsigned long time = 0;
+unsigned long precharge_start_status = 0;
 unsigned long precharge_start_time = 0;
 
 uint8_t gCANMessage[8] = {0, 0, 0, 0, 0, 0, 0, 0};
-
+uint8_t gTimerFlag = 0x0;
 
 /*----- FUNCTION DEFINITIONS -----*/
 void enableInterrupt(){
@@ -88,7 +104,7 @@ void enableInterrupt(){
   PCICR |= _BV(PCIE2) | _BV(PCIE1) | _BV(PCIE0);
   // Enable Pin Change Interrupts on PCINT[23:21] (PD[7:5], Sense[BMS, IMD, MainTS])
   // and PCINT17(IMD Status, PD1)
-  PCMSK2 = (_BV(PCINT23) | _BV(PCINT22);
+  PCMSK2 = _BV(PCINT23) | _BV(PCINT22);
   // Enable Pin Change Interrupts on PCINT9 (BMS_Staus, PC1)
   PCMSK1 |= _BV(PCINT9);
 
@@ -96,6 +112,18 @@ void enableInterrupt(){
   PCMSK0 |= _BV(PCINT2);
 }
 
+unsigned long millis(){
+    unsigned long m;
+    uint8_t oldSREG = SREG;
+
+    // disable interrupts while we read timer0_millis or we might get an
+    // inconsistent value (e.g. in the middle of a write to timer0_millis)
+    cli();
+    m = timer0_millis;
+    SREG = oldSREG;
+    sei();
+    return m;
+}
 
 static inline uint8_t check_BMS(){
   if (PIND & _BV(PIN_SenseBMS)){
@@ -135,13 +163,13 @@ static inline uint8_t check_HVD(){
 
 static inline uint8_t IMD_status(){
   time = millis();
-  if millis() - time = 2000{
-    if (PIND & _BV(IMD_STATUS)){
-
-      return 1;
-    }else{
-      return 0;
-    }
+  if (millis() - time <= 2000) {
+      return 1; // if it hasn't been long enough yet
+  }
+  if (PIND & _BV(IMD_STATUS)){
+    return 1;
+  }else{
+    return 0;
   }
 }
 
@@ -165,17 +193,9 @@ static inline uint8_t AIR_minus_status(){
 void timer0_setup(){
   sei();
   // Timer0 Overflow Interrupt Enabled
-  TIMSK0 |= _BV(TOIE);
+  TIMSK0 |= _BV(TOIE0);
   // Timer 0 with 64 prescaler if F_CPU == 16,000,000
   TCCR0B |= _BV(CS01) | _BV(CS00);
-}
-
-unsigned long millis(){
-  oldSREG = SREG;
-  cli();
-  unsigned long m = timer0_millis;
-  SREG = oldSREG;
-  return m;
 }
 
 inline void low_side_drive_precharge(int charging_time){
@@ -187,7 +207,7 @@ inline void low_side_drive_precharge(int charging_time){
     precharge_start_status = 1;
 
     // open relay after charging time
-    if(milis() - precharge_start_time > charging_time){
+    if(millis() - precharge_start_time > charging_time){
       PORTC &= ~_BV(PRECHARGE);
       gFlag |= _BV(AIR_plus_STATUS_FLAG);
       gFlag &= ~_BV(Brake_Light);
@@ -211,7 +231,7 @@ ISR(PCINT2_vect){
 
   if(!IMD_status()){
      gCANMessage[IMD_Status] = 0x00;
-     gFlag &= ~_BV(IMD_STATUS_FLAG)
+     gFlag &= ~_BV(IMD_STATUS_FLAG);
      CAN_transmit(MOB_BROADCAST,
                  CAN_ID_PANIC,
                  CAN_LEN_PANIC,
@@ -302,7 +322,7 @@ ISR(PCINT0_vect){
       denotes a chage in HVD Sense status*/
 
       // Set HVD_SD_FLAG bit high in global flag
-      gFlag |= _BV(HVD_SD_FLAG)
+      gFlag |= _BV(HVD_SD_FLAG);
       gCANMessage[HVD] = 0xFF;
     }
   }else{
@@ -311,7 +331,7 @@ ISR(PCINT0_vect){
       denotes a chage in HVD Sense status*/
 
       // Set HVD_SD_FLAG bit high in global flag
-      gFlag &= ~_BV(HVD_SD_FLAG)
+      gFlag &= ~_BV(HVD_SD_FLAG);
       gCANMessage[HVD] = 0x00;
     }
   }
@@ -321,27 +341,24 @@ ISR(PCINT0_vect){
 ISR(TIMER0_OVF_vect){
   unsigned long f = timer0_frac;
   unsigned long m = timer0_millis;
-  m += MILLIS_INCREMENT;
-  f += FRAC_STEP;
+  m += MILLIS_INC;
+  f += FRAC_INC;
   if(f>FRAC_MAX){
     f -= FRAC_MAX;
-    m += MILLIS_INCR EMENT;
+    m += MILLIS_INC;
   }
   timer0_frac = f;
   timer0_millis = m;
   timer0_overflow_num++;
 
   if(clock_prescale>20) {
-      gTimerFlag |= _BV(UPDATE_STATUS);
+      gTimerFlag |= _BV(UPDATE_STATUS_FLAG);
       clock_prescale = 0;
   }
   clock_prescale ++;
 }
 
 // CAN MESSAGE INTERRUPT
-#define MOB_BRAKE_LIGHT 0
-#define MOB_IMD_STATUS 1
-#define MOB_BROADCAST 2
 
 ISR(CAN_INT_vect) {
   // Check first board (Dashboard)
@@ -362,7 +379,7 @@ ISR(CAN_INT_vect) {
 
   //Reset status
   CANSTMOB = 0x00;
-  CAN_wait_on_receive(MOB_BRAKELIGHT,
+  CAN_wait_on_receive(MOB_BRAKE_LIGHT,
                       CAN_ID_BRAKE_LIGHT,
                       CAN_LEN_BRAKE_LIGHT,
                       CAN_IDM_single);
@@ -374,9 +391,8 @@ ISR(CAN_INT_vect) {
 int main(void){
   enableInterrupt();
   timer0_setup();
-  time = milis();
-  checking_time = 0;
-  precharge_start_status = 0;
+  time = millis();
+  uint8_t checking_time = 0;
 
 
   DDRB |= _BV(LED1) | _BV(LED2); //Makes PB0 and PB1 as output
@@ -389,7 +405,7 @@ int main(void){
   while(1){
     // enable pin change interrupt for IMD after 2s delay
     if (!checking_time){
-      if(milis() - time > 2000){
+      if(millis() - time > 2000){
         PCMSK2 |= _BV(PCINT21);
         checking_time = 1;
       }
@@ -402,8 +418,8 @@ int main(void){
 
     low_side_drive_AIR_plus();
 
-    if(bit_is_set(gFlag2, UPDATE_STATUS)){
-      gFlag2 &= ~_BV(UPDATE_STATUS);
+    if(bit_is_set(gFlag2, UPDATE_STATUS_FLAG)){
+      gFlag2 &= ~_BV(UPDATE_STATUS_FLAG);
       CAN_transmit(MOB_BROADCAST,
                   CAN_ID_AIR_CONTROL,
                   CAN_LEN_AIR_CONTROL,
