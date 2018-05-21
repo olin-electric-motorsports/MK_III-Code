@@ -7,7 +7,7 @@
 #include <avr/interrupt.h>
 #include <avr/wdt.h>
 #include <stdlib.h>
-#include "spi_api.h"
+#include "m16m1_spi_api.h"
 #include "crc15.h"
 
 
