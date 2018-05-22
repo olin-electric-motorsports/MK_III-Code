@@ -82,12 +82,16 @@ int main(void){
       if (timer_ovf_count < precharge_threshold) {
         PORTC |= _BV(PRECHARGE_LSD);
         PORTD |= _BV(EXT_LED1);
+        PORTB |= _BV(LED1);
       } else {
         PORTC |= _BV(AIR_LSD);
         PORTC |= _BV(EXT_LED2);
+        PORTB |= _BV(LED2);
       }
     } else { //otherwise set both relays LSDs low (open the relays) and reset overflow count
-      PORTC &= ~_BV(PRECHARGE_LSD) & ~_BV(AIR_LSD);
+      PORTC &= ~_BV(PRECHARGE_LSD) & ~_BV(AIR_LSD) & ~_BV(EXT_LED2);
+      PORTD &= ~_BV(EXT_LED1);
+      PORTB &= ~_BV(LED1) & ~_BV(LED2);
       timer_ovf_count = 0x00;
     }
     //Send CAN message saying precharge is done, car can then be started by dashboard so throttle can start sending torque requests to motor controller
