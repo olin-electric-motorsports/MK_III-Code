@@ -1,4 +1,5 @@
-#include "BMSMaster.h"
+#ifndef LTC_DEFS_H
+#define LTC_DEFS_H
 
 #define MD_422HZ_1KHZ 0
 #define MD_27KHZ_14KHZ 1
@@ -38,3 +39,8 @@
 
 #define PULL_UP_CURRENT 1
 #define PULL_DOWN_CURRENT 0
+
+extern const uint16_t UV_THRESHOLD;
+extern const uint16_t OV_THRESHOLD;
+extern const uint8_t ADC_OPT;
+#endif

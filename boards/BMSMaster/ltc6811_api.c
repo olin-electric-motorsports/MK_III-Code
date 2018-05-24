@@ -1,15 +1,124 @@
 /*
 Header:
-    Describe what it does.
+    LTC68XX communication protocol abstraction library:
+        Communicating with LTC68XX devices on an isoSPI daisy chain requires an
+        ongoing SPI transaction between the MCU and the LTC6820. This interface
+        allows the MCU to set config registers on each of the the LTC68XX
+        devices. The LTC68XX devices then operate on those config registers,
+        either measuring voltage, measuring an ADC pin, or accessing GPIO.
 Author:
     @author Peter Seger & Alexander Hoppe
 */
 
 #include "ltc6811_api.h"
+#include "BMSMaster.h"
 
 
 
 
+
+/*----- LTC68XX Communication -----*/
+void init_cfg(void) {
+    /* Initialize the configuration array */
+    uint16_t undervoltage_val = (UV_THRESHOLD/16)-1;
+    uint16_t overvoltage_val  =(OV_THRESHOLD/16);
+    for (int i = 0; i < TOTAL_IC; i++) {
+        tx_cfg[i][0] = 0xFC | ADC_OPT;
+        tx_cfg[i][1] = (uint8_t)(undervoltage_val & 0xFF);
+        tx_cfg[i][2] = (uint8_t)((overvoltage_val & 0x00F) | ((undervoltage_val * 0xF00) >> 8));
+        tx_cfg[i][3] = (uint8_t)((overvoltage_val & 0xFF0) >> 4);
+        tx_cfg[i][4] = 0x00;
+        tx_cfg[i][5] = 0x00;
+    }
+}
+
+void wakeup_idle(uint8_t total_ic) {
+    /* Generic wakeup command to wake isoSPI out of idle */
+    for (uint8_t i = 0; i < total_ic; i++) {
+        PORTB &= ~_BV(PB4);     // Set CS low
+        _delay_us(2);   // Guarentees the isoSPI will be in ready mode
+        PORTB |= _BV(PB4);      // Set CS high
+    }
+}
+
+void wakeup_sleep(uint8_t total_ic) {
+    /* Generic wakeup command to wake the ltc6813 from sleep */
+    for (int i = 0; i < total_ic; i++) {
+        PORTB &= ~_BV(PB4);     // Set CS low
+        _delay_us(300);     // Guarentees the ltc6813 will be in standby
+        PORTB |= _BV(PB4);      // Set CS high
+    }
+}
+
+void o_ltc6811_rdcfg(uint8_t total_ic, // Number of ICs in the system
+        uint8_t r_config[][8] // A two dimensional array that the function stores the read configuration data.
+    )
+{
+    /* Reads configuration registers of a ltc6811 daisy chain */
+    const uint8_t BYTES_IN_REG = 8;
+
+    uint8_t cmd[4];
+    uint8_t *rx_data;
+
+    rx_data = (uint8_t *) malloc((8*total_ic)*sizeof(uint8_t));
+
+    cmd[0] = 0x00;
+    cmd[1] = 0x02;
+    cmd[2] = 0x2b;
+    cmd[3] = 0x0A;
+
+    wakeup_idle(total_ic);  // This will guarentee that the ltc6811 isoSPI port is awake.
+
+    PORTB &= ~_BV(PB4);     // Set CS low
+    spi_write_read(cmd, 4, rx_data, (BYTES_IN_REG*total_ic));   // Read configuration data
+    PORTB |= _BV(PB4);      // Set CS high
+
+    // TODO missing logic potentially???
+}
+
+void o_ltc6811_wrcfg(uint8_t total_ic, // Number of ICs in the system
+        uint8_t config[][6] // A two dimensional array of the configuration data that will be written
+    )
+{
+    /* This command will write the configuration registers in
+        descending order so that the last devices Configuration
+        is written first.
+    */
+    const uint8_t BYTES_IN_REG = 6;
+    const uint8_t CMD_LEN = 4 + (8*total_ic);
+    uint8_t *cmd;
+    uint16_t cfg_pec;
+    uint8_t cmd_index;  //command counter
+
+    cmd = (uint8_t *) malloc(CMD_LEN*sizeof(uint8_t));
+
+    cmd[0] = 0x00;
+    cmd[1] = 0x01;
+    cmd[2] = 0x3d;
+    cmd[3] = 0x6e;
+
+    cmd_index = 4;
+
+    /* Iterate through each IC starting at the last and writing the first config */
+    for (uint8_t current_ic = total_ic; current_ic > 0; current_ic--) {
+        // Iterate through each of the 6 bytes in the CFGR register
+        for (uint8_t current_byte = 0; current_byte < BYTES_IN_REG; current_byte++) {
+            cmd[cmd_index] = config[current_ic-1][current_byte];
+            cmd_index = cmd_index + 1;
+        }
+        cfg_pec = (uint16_t)pec15_calc(BYTES_IN_REG, & config[current_ic-1][0]); // Calculate the PEC for each IC's configuration register data
+        cmd[cmd_index] = (uint8_t)(cfg_pec >> 8);
+        cmd[cmd_index + 1] = (uint8_t)(cfg_pec);
+        cmd_index = cmd_index + 2;
+    }
+
+    wakeup_idle(total_ic);  // Guarentee that the ltc6811 isoSPI port is awake
+
+    PORTB &= ~_BV(PB4);      // Set CS low
+    spi_write_array(cmd, CMD_LEN);
+    PORTB |= _BV(PB4);      // Set CS high
+    free(cmd);
+}
 
 uint32_t o_ltc6811_pollAdc(void) {
     /* This function will block operation until the ADC has finished its conversion */
@@ -68,7 +177,7 @@ void o_ltc6811_adcv(uint8_t MD, //ADC Mode
 
 uint8_t o_ltc6811_rdcv(uint8_t reg, // Controls which cell voltage regulator is read back,
         uint8_t total_ic,   // Number of ICs in the system
-        uint8_t cell_codes[][CELL_CHANNELS] // Array of the parsed cell codes
+        uint16_t cell_voltages[][CELL_CHANNELS] // Array of the parsed cell codes
     )
 {
     /* This function reads and parses the ltc6811 cell voltage registers */
@@ -89,13 +198,17 @@ uint8_t o_ltc6811_rdcv(uint8_t reg, // Controls which cell voltage regulator is 
         // Iterate through all ltc6811 voltage registers
         for (uint8_t cell_reg = 1; cell_reg < NUM_CV_REG+1; cell_reg++) {
             data_counter = 0;
+
+            sprintf(uart_buffer, "Reading single voltage register");
+            LOG_println(uart_buffer, strlen(uart_buffer));
+
             o_ltc6811_rdcv_reg(cell_reg, total_ic, cell_data);  // Reads a single cell voltage register
             // Interate through all ltc6811 in the daisy chain
             for (uint8_t current_ic = 0; current_ic < total_ic; current_ic++) {
                 // Parse read-back data once for each of the 3 voltage codes in register
                 for (uint8_t current_cell = 0; current_cell < CELL_IN_REG; current_cell++) {
                     parsed_cell = cell_data[data_counter] + (cell_data[data_counter + 1] << 8);
-                    cell_codes[current_ic][current_cell + ((cell_reg - 1) * CELL_IN_REG)] = parsed_cell;
+                    cell_voltages[current_ic][current_cell + ((cell_reg - 1) * CELL_IN_REG)] = parsed_cell;
                     data_counter = data_counter + 2;  // Increment by 2 since 2 cells codes were read for 1 cell
                 }
 
@@ -116,7 +229,7 @@ uint8_t o_ltc6811_rdcv(uint8_t reg, // Controls which cell voltage regulator is 
             // Parse read-back data once for each of the 3 voltage codes in register
             for (uint8_t current_cell = 0; current_cell < CELL_IN_REG; current_cell++) {
                 parsed_cell = cell_data[data_counter] + (cell_data[data_counter + 1] << 8);
-                cell_codes[current_ic][current_cell + ((reg -1) * CELL_IN_REG)] = 0x0000FFFF & parsed_cell;
+                cell_voltages[current_ic][current_cell + ((reg -1) * CELL_IN_REG)] = 0x0000FFFF & parsed_cell;
                 data_counter = data_counter + 2; // Increment by 2 since voltage codes are 2 bytes
             }
 
@@ -174,6 +287,32 @@ void o_ltc6811_rdcv_reg(uint8_t reg, //Determines which cell voltage register is
     PORTB |= _BV(PB4);      // Set CS high
 }
 
+//Start a GPIO and Vref2 Conversion
+void o_ltc6811_adax(
+        uint8_t MD, //ADC Mode
+        uint8_t CHG //GPIO Channels to be measured)
+    )
+{
+    uint8_t cmd[4];
+    uint16_t cmd_pec;
+    uint8_t md_bits;
+
+    md_bits = (MD & 0x02) >> 1;
+    cmd[0] = md_bits + 0x04;
+    md_bits = (MD & 0x01) << 7;
+    cmd[1] = md_bits + 0x60 + CHG ;
+
+    cmd_pec = pec15_calc(2, cmd);
+    cmd[2] = (uint8_t)(cmd_pec >> 8);
+    cmd[3] = (uint8_t)(cmd_pec);
+
+    //wakeup_idle (); //This will guarantee that the ltc6811 isoSPI port is awake. This command can be removed.
+    PORTB &= ~_BV(PB4); //set CS low
+    spi_write_array(cmd,4);
+    PORTB |= _BV(PB4); //set CS low
+
+}
+
 int8_t o_ltc6811_rdaux(uint8_t reg, //Determines with GPIO voltage register is read back
         uint8_t total_ic, //The number of ICs in the system
         uint16_t aux_codes[][AUX_CHANNELS] //A two dimensional array of the GPIO voltage codes
@@ -221,7 +360,7 @@ int8_t o_ltc6811_rdaux(uint8_t reg, //Determines with GPIO voltage register is r
     } else {
         o_ltc6811_rdaux_reg(reg, total_ic, data);
         // Iterate through every ltc6811 in the daisy chain
-        for (int current_ic = 0; current_ic < total_ic; current_ic) {
+        for (int current_ic = 0; current_ic < total_ic; current_ic++) {
             // Parse the read back data for each aux voltage in the register
             for (int current_gpio = 0; current_gpio < GPIO_IN_REG; current_gpio++) {
                 parsed_aux = (data[data_counter] + (data[data_counter + 1] << 8));
@@ -257,7 +396,7 @@ void o_ltc6811_rdaux_reg(uint8_t reg, //Determines which GPIO voltage register i
     if (reg == 1) {     // Read back auxiliary group A
         cmd[0] = 0x00;
         cmd[1] = 0x0C;
-    } else if reg == 2) {       // Read back auxiliary group B
+    } else if (reg == 2) {       // Read back auxiliary group B
         cmd[0] = 0x00;
         cmd[1] = 0x0e;
     } else if (reg == 3) {      // Read back auxiliary group B

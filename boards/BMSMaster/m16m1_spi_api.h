@@ -1,9 +1,9 @@
+#ifndef M16M1_SPI_API_H
+#define M16M1_SPI_API_H
+
 #include <stdio.h>
 #include <string.h>
 #include <avr/io.h>
-#include <avr/interrupt.h>
-#include <avr/wdt.h>
-#include "BMSMaster.h"
 
 
 
@@ -15,3 +15,5 @@ void spi_write_read(uint8_t tx_data[], // Array of data to be written on SPI por
         uint8_t *rx_data,  // Input: an array that will store the data read by the SPI port
         uint8_t rx_len  // Option: number of bytes to be read from the SPI port
     );
+
+#endif

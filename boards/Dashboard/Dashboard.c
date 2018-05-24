@@ -22,23 +22,46 @@ Author:
 /*----- Macro Definitions -----*/
 // LEDs
 #define EXT_LED_ORANGE              PB5
+#define EXT_LED_GREEN               PB4
 #define PORT_EXT_LED_ORANGE         PORTB
+#define PORT_EXT_LED_GREEN          PORTB
 #define LED1_PIN                    PB6
 #define PORT_LED1                   PORTB
+
+// AMS and IMD Lights
+#define AMS_PIN                     PB1
+#define PORT_AMS                    PORTB
+#define IMD_PIN                     PB0
+#define PORT_IMD                    PORTB
 
 
 // I/O
 #define START_PIN                   PB2
 #define PORT_START                  PORTB
 
+
+#define AMS_PIN                     PB1
+#define PORT_AMS                    PORTB
+#define IMD_PIN                     PB0
+#define PORT_IMD                    PORTB
+
 // CAN Positions
 #define CAN_START_BUTTON            0
+
+
+// CAN Mailboxes
+#define BRAKE_LIGHT_MBOX            0
+#define BMS_MBOX                    1
+#define AIR_MBOX                    2
+
 
 
 // gFlag positions
 #define STATUS_START                1
 #define BRAKE_PRESSED               2
 #define TSMS_CLOSED                 3
+#define AMS_LIGHT                   4
+#define IMD_STATUS                  5
 
 
 #define UPDATE_STATUS               0
@@ -47,45 +70,111 @@ Author:
 /*----- Global Variables -----*/
 volatile uint8_t gFlag = 0x00;  // Global Flag
 uint8_t gCAN_MSG[8] = {0, 0, 0, 0, 0, 0, 0, 0};  // CAN Message
+uint8_t can_recv_msg[8] = {};
 
 // Timer counters
-uint8_t clock_prescale = 0x00;  // Used for update timer
+uint8_t gClock_prescale = 0x00;  // Used for update timer
+
+
+// Temp and Voltage Vars
+uint8_t curr_temp;      // Temp
+uint8_t curr_volt;      // Voltage
+uint8_t curr_current;   // Current
+uint8_t curr_SoC;       // State of charge
 
 
 
 /*----- Interrupt(s) -----*/
 // *pg 76 of datasheet*
 ISR(CAN_INT_vect) {
-    // Check first board (Brake Light)
-    CANPAGE = (0 << MOBNB0);
-    if(bit_is_set(CANSTMOB, RXOK)) {
-        volatile uint8_t msg = CANMSG;      //grab the first byte of the CAN message
-        uint8_t brake = CANMSG;
-        uint8_t brake_pos = CANMSG;
-        uint8_t bspd = CANMSG;
-        uint8_t hvd = CANMSG;
-        uint8_t tsms = CANMSG;
-        uint8_t left_e_stop = CANMSG;
-        uint8_t right_e_stop = CANMSG;
-        uint8_t main_fuse = CANMSG;
-        // can_recv_msg[0] = msg;
-        // can_recv_msg[1] = 0x99;
 
-        if(brake == 0xFF) {
-            gFlag |= BRAKE_PRESSED;           //trip flag
+    /*----- Brake Light Mailbox -----*/
+    CANPAGE = (BRAKE_LIGHT_MBOX << MOBNB0);
+    if(bit_is_set(CANSTMOB, RXOK)) {
+        can_recv_msg[0] = CANMSG;   // brake
+        can_recv_msg[1] = CANMSG;   // brake_pos
+        can_recv_msg[2] = CANMSG;   // bspd
+        can_recv_msg[3] = CANMSG;   // hvd
+        can_recv_msg[4] = CANMSG;   // tsms
+        can_recv_msg[5] = CANMSG;   // left_e_stop
+        can_recv_msg[6] = CANMSG;   // right_e_stop
+        can_recv_msg[7] = CANMSG;   // main_fuse
+
+        if(can_recv_msg[0] == 0xFF) {
+            gFlag |= _BV(BRAKE_PRESSED);           //trip flag
         } else {
-            gFlag &= ~BRAKE_PRESSED;          //reset flag
+            gFlag &= ~_BV(BRAKE_PRESSED);          //reset flag
         }
 
-        if(tsms == 0xFF) {
-            gFlag |= TSMS_CLOSED;
+        if(can_recv_msg[5] == 0xFF) {
+            gFlag |= _BV(TSMS_CLOSED);
         } else {
-            gFlag &= ~TSMS_CLOSED;
+            gFlag &= ~_BV(TSMS_CLOSED);
         }
 
         //Setup to Receive Again
         CANSTMOB = 0x00;
-        CAN_wait_on_receive(0, CAN_ID_BRAKE_LIGHT, CAN_LEN_BRAKE_LIGHT, 0xFF);
+        CAN_wait_on_receive(BRAKE_LIGHT_MBOX, CAN_ID_BRAKE_LIGHT, CAN_LEN_BRAKE_LIGHT, CAN_IDM_single);
+    }
+
+    /*----- BMS Master Mailbox -----*/
+    CANPAGE = (BMS_MBOX << MOBNB0);
+    if(bit_is_set(CANSTMOB, RXOK)) {
+      can_recv_msg[0] = CANMSG;   // AMS light
+      can_recv_msg[1] = CANMSG;   // IMD light
+      can_recv_msg[2] = CANMSG;   // temperature
+      can_recv_msg[3] = CANMSG;   // Avg. voltage
+      can_recv_msg[4] = CANMSG;   // Avg. current
+      can_recv_msg[5] = CANMSG;   // State of Charge
+
+      // Grab AMS fault light
+      if(can_recv_msg[0] == 0xFF) {
+          gFlag |= _BV(AMS_LIGHT);
+      } else {
+          gFlag &= ~_BV(AMS_LIGHT);
+      }
+
+      // Grab temp, voltage, and current
+      curr_volt = can_recv_msg[3];
+      curr_temp = can_recv_msg[2];
+      curr_current = can_recv_msg[4];
+      curr_SoC = can_recv_msg[5];
+
+
+      // If AMS shutdown is true, make AMS_PIN high
+
+      // If IMD shutdown is true, make IMD_PIN high (if IMD goes low within 2 seconds of car on)
+      // make sure these latch (don't turn off until board is turned off)
+
+      //Setup to Receive Again
+      CANSTMOB = 0x00;
+      CAN_wait_on_receive(BMS_MBOX, CAN_ID_BMS_MASTER, CAN_LEN_BMS_MASTER, CAN_IDM_single);
+    }
+
+    /*----- AIRs Mailbox -----*/
+    CANPAGE = (AIR_MBOX << MOBNB0); //repeat with mailbox 1 to listen for AMS and IMD
+    if(bit_is_set(CANSTMOB, RXOK)) {
+      can_recv_msg[0] = CANMSG;   // BMS shutdown
+      can_recv_msg[1] = CANMSG;   // IMD shutdown
+      can_recv_msg[2] = CANMSG;   // Main tractive system
+      can_recv_msg[3] = CANMSG;   // Connector to HVD
+      can_recv_msg[4] = CANMSG;   // BMS status
+      can_recv_msg[5] = CANMSG;   // IMD status
+
+      // Grab IMD status
+      if(can_recv_msg[5] == 0xFF) {
+          gFlag |= _BV(IMD_STATUS);
+      } else {
+          gFlag &= ~_BV(IMD_STATUS);
+      }
+
+
+      // If IMD shutdown is true, make IMD_PIN high (if IMD goes low within 2 seconds of car on)
+      // make sure these latch (don't turn off until board is turned off)
+
+      //Setup to Receive Again
+      CANSTMOB = 0x00;
+      CAN_wait_on_receive(AIR_MBOX, CAN_ID_AIR_CONTROL, CAN_LEN_AIR_CONTROL, CAN_IDM_single);
     }
 }
 
@@ -103,11 +192,11 @@ ISR(PCINT0_vect) {
 
 ISR(TIMER0_COMPA_vect) {
     // Only send CAN msgs every 20 cycles
-    if(clock_prescale > 20) {
+    if(gClock_prescale > 20) {
         gFlag |= _BV(UPDATE_STATUS);
-        clock_prescale = 0;
+        gClock_prescale = 0;
     }
-    clock_prescale++;
+    gClock_prescale++;
 }
 
 
@@ -119,22 +208,59 @@ void initTimer(void) {
     OCR0A = 0xFF;
 }
 
+void initIO(void) {
+    /* Initialize all inputs and outputs and interrupts */
+    sei();                  // Enable Interrupts
+
+    DDRB |= _BV(LED1_PIN) | _BV(EXT_LED_ORANGE) | _BV(EXT_LED_GREEN) | _BV(AMS_PIN) | _BV(IMD_PIN);
+
+
+    /* Setup interrupt registers */
+    PCICR |= _BV(PCIE0);
+    PCMSK0 |= _BV(PCINT2);
+
+    /*----- Setup PWM output -----*/
+    //Output compare pin is OC1B, so we need OCR1B as our counter
+    TCCR1B |= _BV(CS00); //Clock prescale set to max speed
+    TCCR1B |= _BV(WGM12);
+    TCCR1A |= _BV(COM1B1) | _BV(WGM10); // Fast PWM 8-bit mode
+    TCCR1A &= ~_BV(COM1B0); // Set on match, clear on top
+    DDRD |= _BV(PD2); //Enable output pin
+    DDRD |= _BV(PD3); //Enable output pin
+
+    OCR1A = (uint8_t) 200;      // Duty Cycle
+}
+
 void checkShutdownState(void)   {
     /*
     -Check if bits are set
         -IF they are, set CAN list position to 0xFF
         -ELSE do set CAN list position to 0x00
     */
+    // Check Start Button
+    if(bit_is_set(gFlag, STATUS_START)) {
+        gCAN_MSG[CAN_START_BUTTON] = 0xFF;
+    } else {
+        gCAN_MSG[CAN_START_BUTTON] = 0x00;
+    }
 }
 
 void updateStateFromFlags(void) {
     /*
     Based off the state of the flag(s), update components and send CAN
     */
-    if(bit_is_set(gFlag, STATUS_START)) {
-        gCAN_MSG[CAN_START_BUTTON] = 0xFF;
+    // Check AMS light
+    if(!(bit_is_set(gFlag, AMS_LIGHT))) {
+        PORT_AMS |= _BV(AMS_PIN);
     } else {
-        gCAN_MSG[CAN_START_BUTTON] = 0x00;
+        PORT_AMS &= ~_BV(AMS_PIN);
+    }
+
+    // Check IMD light
+    if(!(bit_is_set(gFlag, IMD_STATUS))) {
+        PORT_IMD |= _BV(IMD_PIN);
+    } else {
+        PORT_IMD &= ~_BV(IMD_PIN);
     }
 }
 
@@ -151,36 +277,37 @@ int main(void){
     -Infinite loop checking shutdown state!
     */
 
-    sei();                  // Enable Interrupts
-
-    /* Setup interrupt registers */
-    PCICR |= _BV(PCIE0);
-    PCMSK0 |= _BV(PCINT2);
-
+    initIO();                           // Initialize I/O
 
     // CAN Enable
     CAN_init(CAN_ENABLED);
-    CAN_wait_on_receive(0, CAN_ID_BRAKE_LIGHT, CAN_LEN_BRAKE_LIGHT, 0xFF);
+    CAN_wait_on_receive(BRAKE_LIGHT_MBOX, CAN_ID_BRAKE_LIGHT, CAN_LEN_BRAKE_LIGHT, CAN_IDM_single);
+    CAN_wait_on_receive(BMS_MBOX, CAN_ID_BMS_MASTER, CAN_LEN_BMS_MASTER, CAN_IDM_single);
+    CAN_wait_on_receive(AIR_MBOX, CAN_ID_AIR_CONTROL, CAN_LEN_AIR_CONTROL, CAN_IDM_single);
 
-    initTimer();
+    initTimer();                        // Initialize Timer
+    gFlag |= _BV(UPDATE_STATUS);        // Read ports
 
     while(1) {
         if(bit_is_set(gFlag, UPDATE_STATUS)) {
             PORT_EXT_LED_ORANGE ^= _BV(EXT_LED_ORANGE);     // Blink Orange LED for timing check
             PORT_LED1 ^= _BV(LED1_PIN);
 
-            // updateStateFromFlags();
+            updateStateFromFlags();
+            checkShutdownState();
 
-            // if(bit_is_set(gFlag, BRAKE_PRESSED) && bit_is_set(gFlag, TSMS_CLOSED)) {
-            //     CAN_transmit(0, CAN_ID_DASHBOARD, CAN_LEN_DASHBOARD, gCAN_MSG);
-            // }
-        }
+            OCR1A = curr_SoC;       // Update current State of Charge
 
-        // Do continuously for now
-        updateStateFromFlags();
 
-        if(bit_is_set(gFlag, BRAKE_PRESSED) && bit_is_set(gFlag, TSMS_CLOSED)) {
-            CAN_transmit(0, CAN_ID_DASHBOARD, CAN_LEN_DASHBOARD, gCAN_MSG);
+            if(bit_is_set(gFlag, BRAKE_PRESSED) && bit_is_set(gFlag, TSMS_CLOSED)) {
+                CAN_transmit(0, CAN_ID_DASHBOARD, CAN_LEN_DASHBOARD, gCAN_MSG);
+            }
+
+
+            if(bit_is_set(gFlag, TSMS_CLOSED)) {
+                PORT_EXT_LED_GREEN ^= _BV(EXT_LED_GREEN);
+            }
+            gFlag &= ~_BV(UPDATE_STATUS);  // Clear Flag
         }
     }
 }
