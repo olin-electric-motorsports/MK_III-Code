@@ -88,7 +88,7 @@ Author:
 -Read both throttle pots (check)
 -Map out both throttle pots (check)
 -Send out throttle value over CAN (check)
--Wait on RTD and trigger it (check ish..)
+-Wait on RTD and trigger it (check)
     -I used a pause for that, update state from flags function
 RULES IC 1.13 pg87 of 2017-2018 FSAE rulebook
 */
@@ -190,7 +190,7 @@ ISR(CAN_INT_vect) {
         if(msg == 0xFF){
             gFlag |= _BV(FLAG_MOTOR_ON);
         } else {
-            gFlag &= ~_BV(FLAG_MOTOR_ON);
+            // gFlag &= ~_BV(FLAG_MOTOR_ON);
         }
 
         CANSTMOB = 0x00;
@@ -242,7 +242,7 @@ ISR(TIMER0_COMPA_vect) {
 
     if(bit_is_set(gFlag,FLAG_THROTTLE_10)){
         imp_error++;
-        // 4Mhz *.1 = 400,000 cycles
+        // 14Hz *.1 = 4 cycles
         if(imp_error > 4){
             gFlag |= _BV(FLAG_PANIC);
         }
@@ -306,14 +306,14 @@ void updateStateFromFlags(void) {
     */
 
     //Based off of ready to drive sound rules (pg113)
-    if(bit_is_set(gFlag,FLAG_MOTOR_ON) && buzzerSet == 0){
-        RTD_PORT |= _BV(RTD_LD);
-        _delay_ms(2000);
-        RTD_PORT &= ~(_BV(RTD_LD));
-        buzzerSet = 1;
-    } else {
-        RTD_PORT &= ~_BV(RTD_LD);
-    }
+    // if(bit_is_set(gFlag,FLAG_MOTOR_ON) && buzzerSet == 0){
+    //     RTD_PORT |= _BV(RTD_LD);
+    //     _delay_ms(3000);
+    //     RTD_PORT &= ~(_BV(RTD_LD));
+    //     buzzerSet = 1;
+    // } else {
+    //     RTD_PORT &= ~_BV(RTD_LD);
+    // }
 
     if(bit_is_set(gFlag,FLAG_PANIC)){
         gThrottle[0] = 0x00;
@@ -539,26 +539,18 @@ void mapAndStoreThrottle(void){
     // LOG_println(disp_string,strlen(disp_string));
 
     // Check if they are within 10%
-    // uint8_t err = 0;
     if (throttle1_mapped > throttle2_mapped && (throttle1_mapped - throttle2_mapped) >= (0xFF/10)) {
-        // err = 1;
         throttle_10_count++;
         gFlag |= _BV(FLAG_THROTTLE_10);
     }
     else if (throttle2_mapped > throttle1_mapped && (throttle2_mapped - throttle1_mapped) >= (0xFF/10)) {
-        // err = 1;
         throttle_10_count++;
         gFlag |= _BV(FLAG_THROTTLE_10);
     } else {
         gFlag &= ~_BV(FLAG_THROTTLE_10);
     }
 
-    // Oops we got an error
-    // if (err) {
-    //     gFlag |= _BV(FLAG_PANIC);
-    //     return;
-    // }
-    if (bit_is_clear(gFlag, FLAG_BRAKE)) {
+    if (bit_is_clear(gFlag, FLAG_BRAKE) && bit_is_set(gFlag,FLAG_MOTOR_ON) ) {
         gThrottle[0] = throttle1_mapped;
         gThrottle[1] = throttle2_mapped;
     } else {
@@ -635,6 +627,8 @@ int main(void){
     sei();
     LOG_init();
     CAN_init(CAN_ENABLED);
+
+    gFlag |= _BV(FLAG_MOTOR_ON);
 
     // Set interrupt registers
     PCICR |= _BV(PCIE0);

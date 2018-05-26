@@ -143,6 +143,7 @@ ISR(CAN_INT_vect) {
       curr_temp = can_recv_msg[2];
       curr_current = can_recv_msg[4];
       curr_SoC = can_recv_msg[5];
+      OCR1B = can_recv_msg[5];
 
 
       // If AMS shutdown is true, make AMS_PIN high
@@ -296,14 +297,14 @@ void updateStateFromFlags(void) {
     Based off the state of the flag(s), update components and send CAN
     */
     // Check AMS light
-    if(!(bit_is_set(gFlag, AMS_LIGHT))) {
+    if((bit_is_set(gFlag, AMS_LIGHT))) {
         PORT_AMS |= _BV(AMS_PIN);
     } else {
         PORT_AMS &= ~_BV(AMS_PIN);
     }
 
     // Check IMD light
-    if(!(bit_is_set(gFlag, IMD_STATUS))) {
+    if((bit_is_set(gFlag, IMD_STATUS))) {
         PORT_IMD |= _BV(IMD_PIN);
     } else {
         PORT_IMD &= ~_BV(IMD_PIN);
@@ -353,30 +354,15 @@ int main(void){
 
     // uint8_t count = 0;
 
+    OCR1B = 216;
+
     while(1) {
         if(bit_is_set(gFlag, UPDATE_STATUS)) {
             PORT_EXT_LED_ORANGE ^= _BV(EXT_LED_ORANGE);     // Blink Orange LED for timing check
             PORT_LED1 ^= _BV(LED1_PIN);
 
-            updateStateFromFlags();
+            // updateStateFromFlags();
             checkShutdownState();
-
-            OCR1B = charge;
-            // OCR1A = throttle;
-
-            // count++;
-            // if(count > 5){
-            //     if(OCR1A == 100){
-            //         OCR1B= 0;
-            //         OCR1A = 0;
-            //     } else {
-            //         OCR1B = 100;
-            //         OCR1A = 100;
-            //     }
-            //     count = 0;
-            // }
-
-
 
 
             if(bit_is_set(gFlag, BRAKE_PRESSED) && bit_is_set(gFlag, TSMS_CLOSED)) {

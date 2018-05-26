@@ -26,7 +26,7 @@ Adafruit_24bargraph bar2 = Adafruit_24bargraph();
 
 uint8_t amount = 0;
 
-const int numReadings = 10;
+const int numReadings = 2;
 
 int readIndex = 0;              // the index of the current reading
 
@@ -61,12 +61,29 @@ void setup() {
     // if ((b % 3) == 0)  bar2.setBar(b, LED_RED);
     // if ((b % 3) == 1)  bar2.setBar(b, LED_YELLOW);
     // if ((b % 3) == 2)  bar2.setBar(b, LED_GREEN);
-    bar2.setBar(b,LED_GREEN);
-    bar1.setBar(b,LED_RED);
+    bar1.setBar(23-((b+12)%24), LED_RED);
+    bar2.setBar((b+12)%24,LED_GREEN);
+    // bar2.setBar(b,LED_GREEN);
+    // bar1.setBar(b,LED_RED);
+    bar2.writeDisplay();
+    bar1.writeDisplay();
+    delay(20);
   }
+  for(int b = 23;b>=0;b--){
+    bar2.setBar(23-((b+12)%24), LED_OFF);
+    bar1.setBar((b+12)%24,LED_OFF);
+    bar2.writeDisplay();
+    bar1.writeDisplay();
+    delay(20);
+  }
+  // for(int b = 0;b<24;b++){
+  //     bar1.setBar((b+12)%24, LED_RED);
+  //     bar1.writeDisplay();
+  //     delay(20);
+  // }
   bar1.writeDisplay();
   bar2.writeDisplay();
-  delay(2000);
+  delay(1000);
 }
 
 
@@ -78,9 +95,9 @@ void loop() {
 
   for (uint8_t b = 0; b < 24; b++) {
     if (b < bars1){
-        bar1.setBar((b+12)%24, LED_RED);
+        bar1.setBar(23-((b+12)%24), LED_RED);
     } else {
-        bar1.setBar((b+12)%24, LED_OFF);
+        bar1.setBar(23-((b+12)%24), LED_OFF);
     }
     if (b < bars2){
         bar2.setBar((b+12)%24, LED_GREEN);
