@@ -5,21 +5,20 @@
 
 
 int main (void) {
-    // Set PB4 to output
-    // Use pin 10 to light up an LED
-    // DDRB |= _BV(PB3);       // Wheel Speed
-    DDRB |= _BV(PB6);    // Suspension
+    DDRC |= _BV(PC5);
     LOG_init();
 
     while(1) {
-        // Toggle PE1 (pin 10)
-        // Toggles power to pin 10 to create a "blink"
-        // PORTB ^= _BV(PB3);          // Wheel /Speed
-        PORTB ^= _BV(PB6);       // Suspension
-        char blink_msg[] = "*blink*";
+        PORTC ^= _BV(PC5);
+        char blink_msg[] = "BL: *blink*";
         LOG_println(blink_msg, strlen(blink_msg));
 
         // Give a delay to the toggle so it doesn't infinitely toggle
-        _delay_ms(100);
+        _delay_ms(1000);
     }
 }
+
+
+//SS PB0, PB1, ext PB3, PB4
+//BL PC4, PC5, ext PC0, PD0
+//WS PB3, PD6, ext PB0, PB1
