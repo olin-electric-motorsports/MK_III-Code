@@ -10,7 +10,7 @@ Author: Lucky Jordan
 */
 
 /*----- Includes -----*/
-
+#include <stdio.h> //for sprintf
 #include <stdlib.h>
 #include <string.h>
 #include <avr/io.h>
@@ -50,6 +50,7 @@ volatile uint16_t MC_voltage = 0x00;
 // CAN Message Objects
 #define MOB_BROADCAST 0 //Broadcasts precharge sequence complete
 #define MOB_MOTORCONTROLLER 1 //Receives messages from motor controller
+#define MOB_BRAKELIGHT 2 //Receives messages from brakelight (just for debugging)
 
 // CAN Message
 uint8_t gCANMessage[8] = {0, 0, 0, 0, 0, 0, 0, 0};
@@ -67,22 +68,39 @@ void timer0_setup(){
 ISR(TIMER0_OVF_vect){
   timer_ovf_count++; //Increment overflow count each time overflow interrupt is triggered
   gBroadcast ^= 0x01; //Flip value of gBroadcast so it broadcasts every other overflow (about 8Hz)
-  gPrintVoltage = 0x00; //Print voltage each overflow
+  gPrintVoltage = 0x01; //Print voltage each overflow
 }
 
 ISR(CAN_INT_vect) {
-  CANPAGE = (MOB_MOTORCONTROLLER << MOBNB0);
-  if (bit_is_set(CANSTMOB,RXOK)) {
-      volatile uint8_t msg[2];
-      msg[0] = CANMSG;
-      msg[1] = CANMSG;
+  //CANPAGE = (MOB_MOTORCONTROLLER << MOBNB0);
+  //if (bit_is_set(CANSTMOB,RXOK)) {
+  //    volatile uint8_t msg[2];
+  //    msg[0] = CANMSG;
+  //    msg[1] = CANMSG;
 
-      MC_voltage = msg[0] | (msg[1]<<8);
+  //    MC_voltage = msg[0] | (msg[1]<<8);
+  //    char nice_job[] = "Nice job Daddio!";
+  //    LOG_println(nice_job,strlen(nice_job));
+
+  //    CANSTMOB = 0x00;
+  //    CAN_wait_on_receive(MOB_MOTORCONTROLLER,
+  //                        CAN_ID_MC_VOLTAGE,
+  //                        CAN_LEN_MC_VOLTAGE,
+  //                        CAN_IDM_single);
+  //}
+
+  CANPAGE = (MOB_BRAKELIGHT << MOBNB0);
+  if (bit_is_set(CANSTMOB,RXOK)) {
+      volatile int8_t msg = CANMSG;
+
+      char brake_string[64];
+      sprintf(brake_string,"%u",msg);
+      LOG_println(brake_string,strlen(brake_string));
 
       CANSTMOB = 0x00;
-      CAN_wait_on_receive(MOB_MOTORCONTROLLER,
-                          CAN_ID_MC_VOLTAGE,
-                          CAN_LEN_MC_VOLTAGE,
+      CAN_wait_on_receive(MOB_BRAKELIGHT,
+                          CAN_ID_BRAKE_LIGHT,
+                          CAN_LEN_BRAKE_LIGHT,
                           CAN_IDM_single);
   }
 }
@@ -99,6 +117,11 @@ int main(void){
                       CAN_LEN_MC_VOLTAGE,
                       CAN_IDM_single);
 
+  CAN_wait_on_receive(MOB_BRAKELIGHT,
+                      CAN_ID_BRAKE_LIGHT,
+                      CAN_LEN_BRAKE_LIGHT,
+                      CAN_IDM_single);
+
   DDRB |= _BV(LED1) | _BV(LED2); //Set on board programming LEDs as uptputs
   DDRC |= _BV(PRECHARGE_LSD) | _BV(EXT_LED2) | _BV(AIR_LSD); //Set precharge lsd, air + lsd and one external led as output
   DDRD |= _BV(EXT_LED1); //Set other external led as output
@@ -108,8 +131,8 @@ int main(void){
   PORTC &= ~_BV(PRECHARGE_LSD) & ~_BV(AIR_LSD); //Make sure precharge and AIR + relays are open to start
 
   //strings for uart debugging
-  char in_progress[] = "PRECHRGGGGRRRING";
-  char complete[] = "PRECHRGGGG COMPLEEEEET";
+  //char in_progress[] = "PRECHRGGGGRRRING";
+  //char complete[] = "PRECHRGGGG COMPLEEEEET";
 
   while(1){
     //Should I change this to interrupts? not sure, for loop seems like it might work fine but also this board does other stuff that I haven't implemented yet
@@ -121,13 +144,13 @@ int main(void){
         PORTD |= _BV(EXT_LED1);
         PORTB |= _BV(LED1);
         gPechargeStarted = 0x01;
-        LOG_println(in_progress,strlen(in_progress));
+        //LOG_println(in_progress,strlen(in_progress));
       } else {
         PORTC |= _BV(AIR_LSD);
         PORTC |= _BV(EXT_LED2);
         PORTB |= _BV(LED2);
         gPrechargeComplete = 0xFF;
-        LOG_println(complete,strlen(complete));
+        //LOG_println(complete,strlen(complete));
       }
     } else { //otherwise set both relays LSDs low (open the relays) and reset overflow count
       PORTC &= ~_BV(PRECHARGE_LSD) & ~_BV(AIR_LSD) & ~_BV(EXT_LED2);
@@ -149,8 +172,9 @@ int main(void){
 
     //Print voltage measurement from MC to monitor precharge
     if (gPechargeStarted && gPrintVoltage) {
-      //sprintf(disp_string,"MC Voltage %d",MC_voltage);
-      //LOG_println(disp_string,strlen(disp_string));
+      char disp_string[64];
+      sprintf(disp_string,"MC Voltage %u",MC_voltage);
+      LOG_println(disp_string,strlen(disp_string));
       gPrintVoltage = 0x00;
     }
   }
