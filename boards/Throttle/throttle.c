@@ -74,8 +74,8 @@ Author:
 #define MOB_AIR_CONTROL         1
 #define MOB_DASHBOARD           2
 
-#define MOB_BROADCAST           0
-#define MOB_MOTORCONTROLLER     1
+#define MOB_BROADCAST           3
+#define MOB_MOTORCONTROLLER     4
 
 // for gTimerFlag
 #define UPDATE_STATUS           0
@@ -88,7 +88,7 @@ Author:
 -Read both throttle pots (check)
 -Map out both throttle pots (check)
 -Send out throttle value over CAN (check)
--Wait on RTD and trigger it (check ish..)
+-Wait on RTD and trigger it (check)
     -I used a pause for that, update state from flags function
 RULES IC 1.13 pg87 of 2017-2018 FSAE rulebook
 */
@@ -130,7 +130,12 @@ uint16_t throttle_10_count = 0x00;
 uint8_t clock_prescale = 0x00;
 uint8_t timer_counter = 0x00;
 uint32_t imp_error = 0x00;
+int buzzerSet = 0;
 
+//For motor calibration only
+//Need to disable motor controller after running for a while ~30 seconds
+//Set Data Byte 5 of MC COMMAND to 0x00 after compare_count>450ish
+volatile uint16_t compare_count = 0x00;
 
 /*----- Interrupt(s) -----*/
 // *pg 76 of datasheet*
@@ -190,7 +195,7 @@ ISR(CAN_INT_vect) {
         if(msg == 0xFF){
             gFlag |= _BV(FLAG_MOTOR_ON);
         } else {
-            gFlag &= ~_BV(FLAG_MOTOR_ON);
+            // gFlag &= ~_BV(FLAG_MOTOR_ON);
         }
 
         CANSTMOB = 0x00;
@@ -242,14 +247,17 @@ ISR(TIMER0_COMPA_vect) {
 
     if(bit_is_set(gFlag,FLAG_THROTTLE_10)){
         imp_error++;
-        // 4Mhz *.1 = 400,000 cycles
-        if(imp_error > 400000){
+        // 14Hz *.1 = 4 cycles
+        if(imp_error > 4){
             gFlag |= _BV(FLAG_PANIC);
         }
     } else {
         imp_error = 0;
     }
 
+    //For motor calibration only
+    //Need to disable motor controller after running for a while ~30 seconds
+    compare_count++;
 
 }
 
@@ -306,17 +314,22 @@ void updateStateFromFlags(void) {
     */
 
     //Based off of ready to drive sound rules (pg113)
-    if(bit_is_set(gFlag,FLAG_MOTOR_ON)){
-        RTD_PORT |= _BV(RTD_LD);
-        _delay_ms(2000);
-        RTD_PORT &= ~(_BV(RTD_LD));
-    } else {
-        RTD_PORT &= ~_BV(RTD_LD);
-    }
+    // if(bit_is_set(gFlag,FLAG_MOTOR_ON) && buzzerSet == 0){
+    //     RTD_PORT |= _BV(RTD_LD);
+    //     _delay_ms(3000);
+    //     RTD_PORT &= ~(_BV(RTD_LD));
+    //     buzzerSet = 1;
+    // } else {
+    //     RTD_PORT &= ~_BV(RTD_LD);
+    // }
 
     if(bit_is_set(gFlag,FLAG_PANIC)){
         gThrottle[0] = 0x00;
         gThrottle[1] = 0x00;
+        LED1_PORT |= _BV(LED1);
+        LED2_PORT |= _BV(LED2);
+        LED3_PORT |= _BV(LED3);
+
         //DO MORE
     }
 
@@ -452,6 +465,11 @@ void mapAndStoreThrottle(void){
     uint32_t throttle1 = gThrottle16[0];
     uint32_t throttle2 = gThrottle16[1];
 
+    if(throttle1 > 900 || throttle2 > 900){
+        gFlag |= _BV(FLAG_PANIC);
+        return;
+    }
+
     // Adjust for amplification
     uint8_t throttle1_centered = throttle1 >> 2;
     uint8_t throttle2_centered = ((throttle2 * 100)/122) >> 2;
@@ -529,26 +547,18 @@ void mapAndStoreThrottle(void){
     // LOG_println(disp_string,strlen(disp_string));
 
     // Check if they are within 10%
-    uint8_t err = 0;
     if (throttle1_mapped > throttle2_mapped && (throttle1_mapped - throttle2_mapped) >= (0xFF/10)) {
-        err = 1;
         throttle_10_count++;
         gFlag |= _BV(FLAG_THROTTLE_10);
     }
     else if (throttle2_mapped > throttle1_mapped && (throttle2_mapped - throttle1_mapped) >= (0xFF/10)) {
-        err = 1;
         throttle_10_count++;
         gFlag |= _BV(FLAG_THROTTLE_10);
     } else {
         gFlag &= ~_BV(FLAG_THROTTLE_10);
     }
 
-    // Oops we got an error
-    if (err) {
-        gFlag |= _BV(FLAG_PANIC);
-        return;
-    }
-    if (bit_is_clear(gFlag, FLAG_BRAKE)) {
+    if (bit_is_clear(gFlag, FLAG_BRAKE) && bit_is_set(gFlag,FLAG_MOTOR_ON) ) {
         gThrottle[0] = throttle1_mapped;
         gThrottle[1] = throttle2_mapped;
     } else {
@@ -560,9 +570,9 @@ void mapAndStoreThrottle(void){
 
 void sendCanMessages(int viewCan){
 
-    if(bit_is_set(gFlag,FLAG_PANIC)) {
-        // return;
-    }
+    // if(bit_is_set(gFlag,FLAG_PANIC)) {
+    //     return;
+    // }
 
     gCANMessage[0] = gThrottle[0];
     gCANMessage[1] = gSteering;
@@ -584,14 +594,14 @@ void sendCanMessages(int viewCan){
     gCANMotorController[1] = mc_remap >> 8;
     gCANMotorController[2] = 0x00;
     gCANMotorController[3] = 0x00;
-    gCANMotorController[4] = 1;
+    gCANMotorController[4] = 0x01;
     gCANMotorController[5] = bit_is_set(gFlag,FLAG_MOTOR_ON) ? 0x01 : 0x00;
     gCANMotorController[6] = 0x00;
     gCANMotorController[7] = 0x00;
 
     CAN_transmit(MOB_MOTORCONTROLLER,
-                 CAN_ID_MOTORCONTROLLER,
-                 CAN_LEN_MOTORCONTROLLER,
+                 CAN_ID_MC_COMMAND,
+                 CAN_LEN_MC_COMMAND,
                  gCANMotorController);
     if(viewCan){
         char msg1[128];
@@ -607,7 +617,7 @@ void sendCanMessages(int viewCan){
     }
 
 
-    EXT_LED_PORT ^= _BV(EXT_LED2);
+    // EXT_LED_PORT ^= _BV(EXT_LED2);
 }
 
 
@@ -624,6 +634,9 @@ int main(void){
     initADC();
     sei();
     LOG_init();
+    CAN_init(CAN_ENABLED);
+
+    gFlag |= _BV(FLAG_MOTOR_ON);
 
     // Set interrupt registers
     PCICR |= _BV(PCIE0);
@@ -654,6 +667,13 @@ int main(void){
                         CAN_ID_BRAKE_LIGHT,
                         CAN_LEN_BRAKE_LIGHT,
                         CAN_IDM_single);
+
+    // Clear CAN lockout?
+    _delay_ms(1000);
+    CAN_transmit(MOB_MOTORCONTROLLER,
+                 CAN_ID_MC_COMMAND,
+                 CAN_LEN_MC_COMMAND,
+                 gCANMotorController);
 
     while(1){
         if(bit_is_set(gTimerFlag,UPDATE_STATUS)){

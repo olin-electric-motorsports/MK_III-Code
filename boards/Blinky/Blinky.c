@@ -5,12 +5,12 @@
 
 
 int main (void) {
-    DDRC |= _BV(PC5);
+    DDRB |= _BV(PB3);
     LOG_init();
 
     while(1) {
-        PORTC ^= _BV(PC5);
-        char blink_msg[] = "BL: *blink*";
+        PORTB ^= _BV(PB3);
+        char blink_msg[] = "WS: *blink*";
         LOG_println(blink_msg, strlen(blink_msg));
 
         // Give a delay to the toggle so it doesn't infinitely toggle
