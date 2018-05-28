@@ -19,6 +19,7 @@ volatile uint8_t msg[8]; //adding this for troubleshooting throttle
 
 //CAN message
 uint8_t gCANMessage[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+uint8_t gCANBMSMessage[6] = {0,0,0,0,0,0};
 
 void timer0_setup(){
   sei(); //enable interrupts
@@ -98,12 +99,37 @@ int main(void) {
   DDRC |= _BV(PC5);
   while(1){
     if(gFlag){
+      gFlag = 0x00;
       CAN_transmit(MOB,
                    CAN_ID_BRAKE_LIGHT,
                    CAN_LEN_BRAKE_LIGHT,
                    gCANMessage);
       LOG_println("CAN message sent!",strlen("CAN message sent!"));
       PORTC ^= _BV(PC5);
+    }
+  }
+}*/
+
+//BMS main
+/*
+int main(void) {
+
+  timer0_setup();
+  LOG_init();
+  CAN_init(CAN_ENABLED);
+
+  DDRC |= _BV(PC0);
+  DDRB |= _BV(PB2);
+  PORTB |= _BV(PB2);
+  while(1){
+    if(gFlag){
+      gFlag = 0x00;
+      CAN_transmit(MOB,
+                   CAN_ID_BMS_MASTER,
+                   CAN_LEN_BMS_MASTER,
+                   gCANBMSMessage);
+      LOG_println("CAN message sent!",strlen("CAN message sent!"));
+      PORTC ^= _BV(PC0);
     }
   }
 }*/
