@@ -60,7 +60,7 @@ Author:
 
 /* Flags */
 #define FLAG_BRAKE              0
-#define FLAG_AIRS               1
+#define FLAG_THROTTLE_BRAKE     1
 #define FLAG_MOTOR_ON           2
 #define FLAG_INERTIA            3
 #define FLAG_ESTOP              4
@@ -132,11 +132,6 @@ uint8_t timer_counter = 0x00;
 uint32_t imp_error = 0x00;
 int buzzerSet = 0;
 
-//For motor calibration only
-//Need to disable motor controller after running for a while ~30 seconds
-//Set Data Byte 5 of MC COMMAND to 0x00 after compare_count>450ish
-volatile uint16_t compare_count = 0x00;
-
 /*----- Interrupt(s) -----*/
 // *pg 76 of datasheet*
 // https://github.com/olin-electric-motorsports/MK_II-Code/tree/master/lib
@@ -158,8 +153,9 @@ ISR(CAN_INT_vect) {
 
         if(msg == 0xFF){
             gFlag |= _BV(FLAG_BRAKE);
+            gFlag |= _BV(FLAG_THROTTLE_BRAKE);
         } else {
-            gFlag &= ~_BV(FLAG_BRAKE);
+           gFlag &= ~_BV(FLAG_BRAKE);
         }
 
         CANSTMOB = 0x00;
@@ -168,24 +164,6 @@ ISR(CAN_INT_vect) {
                             CAN_LEN_BRAKE_LIGHT,
                             CAN_IDM_single);
     }
-
-    // Air control unnesecary??
-    // CANPAGE = (MOB_AIR_CONTROL << MOBNB0);
-    // if (bit_is_set(CANSTMOB,RXOK)) {
-    //     volatile int8_t msg = CANMSG;
-    //
-    //     if(msg == 0xFF){
-    //         gFlag |= _BV(FLAG_AIRS);
-    //     } else {
-    //         gFlag &= ~_BV(FLAG_AIRS);
-    //     }
-    //
-    //     CANSTMOB = 0x00;
-    //     CAN_wait_on_receive(MOB_AIR_CONTROL,
-    //                         CAN_ID_AIR_CONTROL,
-    //                         CAN_LEN_AIR_CONTROL,
-    //                         CAN_IDM_single);
-    // }
 
     //Start button
     CANPAGE = (MOB_DASHBOARD << MOBNB0);
@@ -248,7 +226,7 @@ ISR(TIMER0_COMPA_vect) {
     if(bit_is_set(gFlag,FLAG_THROTTLE_10)){
         imp_error++;
         // 14Hz *.1 = 4 cycles
-        if(imp_error > 4){
+        if(imp_error > 5){
             gFlag |= _BV(FLAG_PANIC);
         }
     } else {
@@ -314,14 +292,14 @@ void updateStateFromFlags(void) {
     */
 
     //Based off of ready to drive sound rules (pg113)
-    // if(bit_is_set(gFlag,FLAG_MOTOR_ON) && buzzerSet == 0){
-    //     RTD_PORT |= _BV(RTD_LD);
-    //     _delay_ms(3000);
-    //     RTD_PORT &= ~(_BV(RTD_LD));
-    //     buzzerSet = 1;
-    // } else {
-    //     RTD_PORT &= ~_BV(RTD_LD);
-    // }
+    if(bit_is_set(gFlag,FLAG_MOTOR_ON) && buzzerSet == 0){
+        RTD_PORT |= _BV(RTD_LD);
+        _delay_ms(3000);
+        RTD_PORT &= ~(_BV(RTD_LD));
+        buzzerSet = 1;
+    } else {
+        RTD_PORT &= ~_BV(RTD_LD);
+    }
 
     if(bit_is_set(gFlag,FLAG_PANIC)){
         gThrottle[0] = 0x00;
@@ -558,7 +536,12 @@ void mapAndStoreThrottle(void){
         gFlag &= ~_BV(FLAG_THROTTLE_10);
     }
 
-    if (bit_is_clear(gFlag, FLAG_BRAKE) && bit_is_set(gFlag,FLAG_MOTOR_ON) ) {
+    if(throttle1_mapped == 0 && bit_is_clear(gFlag,FLAG_BRAKE)){
+        gFlag &= ~_BV(FLAG_THROTTLE_BRAKE);
+    }
+
+    
+    if (bit_is_clear(gFlag, FLAG_BRAKE) && bit_is_clear(gFlag,FLAG_THROTTLE_BRAKE) && bit_is_set(gFlag,FLAG_MOTOR_ON) ) {
         gThrottle[0] = throttle1_mapped;
         gThrottle[1] = throttle2_mapped;
     } else {
@@ -566,13 +549,10 @@ void mapAndStoreThrottle(void){
         gThrottle[1] = 0x00;
         // gFlag |= _BV(FLAG_THROTTLE_BRAKE);
     }
+    
 }
 
 void sendCanMessages(int viewCan){
-
-    // if(bit_is_set(gFlag,FLAG_PANIC)) {
-    //     return;
-    // }
 
     gCANMessage[0] = gThrottle[0];
     gCANMessage[1] = gSteering;
@@ -636,8 +616,6 @@ int main(void){
     LOG_init();
     CAN_init(CAN_ENABLED);
 
-    gFlag |= _BV(FLAG_MOTOR_ON);
-
     // Set interrupt registers
     PCICR |= _BV(PCIE0);
     PCMSK0 |= _BV(PCINT5) | _BV(PCINT6) | _BV(PCINT7);
@@ -652,11 +630,24 @@ int main(void){
     STEERING_PORT |= _BV(STEERING);
 
     // Commenting this out because it's awful - Hoppe 4/28/18
-    // // turn on RTD for .4 seconds
+    // // turn on RTD for .4 seconds...heheh
     // // just for wiring harness, not necessary
     // RTD_PORT |= _BV(RTD_LD);
     // _delay_ms(400);
     // RTD_PORT &= ~(_BV(RTD_LD));
+    
+    _delay_ms(1000);
+    CAN_transmit(MOB_MOTORCONTROLLER,
+                 CAN_ID_MC_COMMAND,
+                 CAN_LEN_MC_COMMAND,
+                 gCANMotorController);
+
+    //In order to enable the motor controller, we must first send a byte disabling it (this is by RMS design to prevent accidental enbaling)
+    _delay_ms(1000);
+    CAN_transmit(MOB_MOTORCONTROLLER,
+                 CAN_ID_MC_COMMAND,
+                 CAN_LEN_MC_COMMAND,
+                 gCANMotorController);
 
     CAN_wait_on_receive(MOB_DASHBOARD,
                         CAN_ID_DASHBOARD,
