@@ -28,11 +28,27 @@ uint8_t precharge_threshold = 50; //This variable is a threshold at which we con
 //Because the timer is 8 bit, it can only count up to 255 cycles and therefore overflows (4000000/1024)/255 times per second. To get the
 //number of overflows in 13 seconds we multiply this value by 13: 13*((4000000/1024)/255) = 199 ish. We round up to 200 to get the threshold.
 volatile uint16_t MC_voltage = 0xFFFF;
-uint8_t clock_prescale = 0x05;
-volatile uint8_t ovf_count = 0x00;
+uint8_t voltage_clock_prescale = 0x05;
+uint8_t can_clock_prescale = 0x02;
+volatile uint8_t voltage_ovf_count = 0x00; //used for printing motor controller voltage
+volatile uint8_t can_ovf_count = 0x00; //used for when to send can messages
 volatile uint8_t gFlag = 0x00;
+uint8_t imd_delay_threshold = 50; //wait a bit before checking imd status
 
 /*----- Macro Definitions -----*/
+//for gFlag
+#define print_voltage      1
+#define send_can           2
+#define imd_status         3
+#define imd_shutdown       4
+#define imd_delay_over     5
+
+//interrupts for shutdown and imd imd_status
+#define imd_sd_pin          PCINT22
+#define main_pack_conn_pin  PCINT23
+#define conn_to_hvd_pin     PCINT2
+#define imd_status_pin      PCINT17
+
 // On board LEDs
 #define LED1		PB0
 #define LED2		PB1
@@ -49,9 +65,15 @@ volatile uint8_t gFlag = 0x00;
 // CAN Message Objects
 #define MOB_BROADCAST 0 //Broadcasts precharge sequence complete
 #define MOB_MOTORCONTROLLER 1 //Receives messages from motor controller
+#define MOB_PANIC 2 //Panic MOB for BMS to open shutdown circuit
 
 // CAN Message
-uint8_t gCANMessage[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+volatile uint8_t gCANMessage[5] = {0, 0, 0, 0, 0};
+#define precharge_complete    1
+#define sd_main_pack_conn     2
+#define sd_conn_to_hvd        3
+#define sd_bms                4
+#define sd_imd                5
 
 //Setup 8 bit timer
 //helpful reference http://exploreembedded.com/wiki/AVR_Timer_programming
@@ -65,10 +87,18 @@ void timer0_setup(){
 
 ISR(TIMER0_OVF_vect){
   timer_ovf_count++; //Increment overflow count each time overflow interrupt is triggered
-  ovf_count++;
-  if (ovf_count > clock_prescale) {
-    gFlag ^= 0x01;
-    ovf_count = 0x00;
+  voltage_ovf_count++;
+  can_ovf_count++;
+  if (voltage_ovf_count > voltage_clock_prescale) {
+    gFlag |= _BV(print_voltage);
+    voltage_ovf_count = 0x00;
+  }
+  if (can_ovf_count > can_clock_prescale) {
+    gFlag |= _BV(send_can);
+    can_ovf_count = 0x00;
+  }
+  if (timer_ovf_count > imd_delay_threshold) {
+    gFlag |= _BV(imd_delay_over);
   }
 }
 
@@ -87,7 +117,36 @@ ISR(CAN_INT_vect) {
                           CAN_LEN_MC_VOLTAGE,
                           CAN_IDM_single);
   }
+}
 
+ISR(PCINT0_vect) {
+    if(bit_is_set(PINB,conn_to_hvd_pin)){
+        gCANMessage[sd_conn_to_hvd] = 0xFF;
+    } else {
+        gCANMessage[sd_conn_to_hvd] = 0x00;
+    }
+}
+
+ISR(PCINT2_vect) {
+    if(bit_is_set(PIND,imd_sd_pin)){
+        gCANMessage[sd_imd] = 0xFF;
+        gFlag |= _BV(imd_shutdown);
+    } else {
+        gCANMessage[sd_imd] = 0x00;
+        gFlag &= ~_BV(imd_shutdown);
+    }
+
+    if(bit_is_set(PIND,main_pack_conn_pin)){
+        gCANMessage[sd_main_pack_conn] = 0xFF;
+    } else {
+        gCANMessage[sd_main_pack_conn] = 0x00;
+    }
+
+    if(bit_is_set(PIND,imd_status_pin)){
+        gFlag |= _BV(imd_status);
+    } else {
+        gFlag &= ~_BV(imd_status);
+    }
 }
 
 int main(void){
@@ -102,11 +161,26 @@ int main(void){
                       CAN_LEN_MC_VOLTAGE,
                       CAN_IDM_single);
 
+  //interrupts
+  PCICR |= _BV(PCIE0) | _BV(PCIE2);
+  PCMSK0 |= _BV(conn_to_hvd_pin)
+  PCMSK2 |= _BV(imd_sd_pin7) | _BV(main_pack_conn_pin) | _BV(imd_status_pin);
+
+  //other IO stuff
   DDRB |= _BV(LED1) | _BV(LED2); //Set on board programming LEDs as uptputs
   DDRC |= _BV(PRECHARGE_LSD) | _BV(EXT_LED2) | _BV(AIR_LSD); //Set precharge lsd, air + lsd and one external led as output
   DDRD |= _BV(EXT_LED1); //Set other external led as output
 
   DDRC &= ~_BV(AIR_auxillary); //Set auxillary air - contact sense as input
+  //if AIR is close immediately on startup send panic messasge
+  if (bit_is_set(PINC, AIR_auxillary)) {
+    CAN_transmit(MOB_PANIC,
+          CAN_ID_PANIC,
+          CAN_LEN_PANIC,
+          0x00);
+          char air_panic[] = "AIR PANIC!";
+          LOG_println(air_panic,strlen(air_panic));
+  }
 
   PORTC &= ~_BV(PRECHARGE_LSD) & ~_BV(AIR_LSD); //Make sure precharge and AIR + relays are open to start
 
@@ -125,20 +199,45 @@ int main(void){
         PORTC |= _BV(AIR_LSD);
         PORTC |= _BV(EXT_LED2);
         PORTB |= _BV(LED2);
+        gCANMessage[precharge_complete] = 0xFF;
       }
     } else { //otherwise set both relays LSDs low (open the relays) and reset overflow count
       PORTC &= ~_BV(PRECHARGE_LSD) & ~_BV(AIR_LSD) & ~_BV(EXT_LED2);
       PORTD &= ~_BV(EXT_LED1);
       PORTB &= ~_BV(LED1) & ~_BV(LED2);
+      gCANMessage[precharge_complete] = 0x00;
       timer_ovf_count = 0x00;
     }
 
+    //check if imd status isn't right
+    if (bit_is_set(gFlag,imd_delay_over)) {
+      if(~(bit_is_set(gFlag,imd_status) ^ bit_is_set(gFlag,imd_shutdown))) {
+        CAN_transmit(MOB_PANIC,
+                    CAN_ID_PANIC,
+                    CAN_LEN_PANIC,
+                    0x00);
+      }
+      char imd_panic[] = "IMD PANIC!";
+      LOG_println(imd_panic,strlen(imd_panic));
+    }
+
     //Print voltage measurement from MC to monitor precharge
-    if (gFlag) {
-      gFlag = 0x00;
+    if (bit_is_set(gFlag,print_voltage)) {
+      gFlag &= ~_BV(print_voltage);
       char disp_string[64];
       sprintf(disp_string,"MC Voltage %u",MC_voltage);
       LOG_println(disp_string,strlen(disp_string));
+    }
+
+    //Send CAN message
+    if (bit_is_set(gFlag,send_can)) {
+      gFlag &= ~_BV(send_can);
+      CAN_transmit(MOB_BROADCAST,
+                  CAN_ID_AIR_CONTROL,
+                  CAN_LEN_AIR_CONTROL,
+                  gCANMessage);
+      char can_sent[] = "CAN sent!";
+      LOG_println(can_sent,strlen(can_sent));
     }
   }
 }
