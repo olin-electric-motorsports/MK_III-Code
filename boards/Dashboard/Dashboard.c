@@ -131,7 +131,7 @@ ISR(CAN_INT_vect) {
       can_recv_msg[4] = CANMSG;   // Avg. current
       can_recv_msg[5] = CANMSG;   // State of Charge
 
-      Grab AMS fault light
+      // Grab AMS fault light
       if(can_recv_msg[0] == 0x00) {
           gFlag |= _BV(AMS_LIGHT);
       }

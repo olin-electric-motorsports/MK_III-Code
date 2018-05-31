@@ -237,7 +237,7 @@ ISR(TIMER0_COMPA_vect) {
 
     //For motor calibration only
     //Need to disable motor controller after running for a while ~30 seconds
-    compare_count++;
+    // compare_count++;
 
 }
 
