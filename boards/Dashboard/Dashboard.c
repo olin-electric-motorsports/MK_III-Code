@@ -81,10 +81,10 @@ uint8_t gClock_prescale = 0x00;  // Used for update timer
 uint8_t curr_temp;      // Temp
 uint8_t curr_volt;      // Voltage
 uint8_t curr_current;   // Current
-uint8_t curr_SoC;       // State of charge
+uint8_t curr_SoC = 0;       // State of charge
 
 uint8_t throttle = 0;
-uint8_t charge = 255;
+
 
 
 
@@ -104,7 +104,7 @@ ISR(CAN_INT_vect) {
         can_recv_msg[6] = CANMSG;   // right_e_stop
         can_recv_msg[7] = CANMSG;   // main_fuse
 
-        if(can_recv_msg[0] == 0xFF) {
+        if(can_recv_msg[1] == 0xFF) {
             gFlag |= _BV(BRAKE_PRESSED);           //trip flag
         } else {
             gFlag &= ~_BV(BRAKE_PRESSED);          //reset flag
@@ -131,11 +131,9 @@ ISR(CAN_INT_vect) {
       can_recv_msg[4] = CANMSG;   // Avg. current
       can_recv_msg[5] = CANMSG;   // State of Charge
 
-      // Grab AMS fault light
-      if(can_recv_msg[0] == 0xFF) {
+      Grab AMS fault light
+      if(can_recv_msg[0] == 0x00) {
           gFlag |= _BV(AMS_LIGHT);
-      } else {
-          gFlag &= ~_BV(AMS_LIGHT);
       }
 
       // Grab temp, voltage, and current
@@ -144,6 +142,7 @@ ISR(CAN_INT_vect) {
       curr_current = can_recv_msg[4];
       curr_SoC = can_recv_msg[5];
       OCR1B = can_recv_msg[5];
+
 
 
       // If AMS shutdown is true, make AMS_PIN high
@@ -159,18 +158,15 @@ ISR(CAN_INT_vect) {
     /*----- AIRs Mailbox -----*/
     CANPAGE = (AIR_MBOX << MOBNB0); //repeat with mailbox 1 to listen for AMS and IMD
     if(bit_is_set(CANSTMOB, RXOK)) {
-      can_recv_msg[0] = CANMSG;   // BMS shutdown
-      can_recv_msg[1] = CANMSG;   // IMD shutdown
-      can_recv_msg[2] = CANMSG;   // Main tractive system
-      can_recv_msg[3] = CANMSG;   // Connector to HVD
-      can_recv_msg[4] = CANMSG;   // BMS status
-      can_recv_msg[5] = CANMSG;   // IMD status
+      can_recv_msg[0] = CANMSG;   // Precharge status 0xFF if complete
+      can_recv_msg[1] = CANMSG;   // Main tractive system
+      can_recv_msg[2] = CANMSG;   // Connector to HVD
+      can_recv_msg[3] = CANMSG;   // BMS status
+      can_recv_msg[4] = CANMSG;   // IMD status
 
       // Grab IMD status
-      if(can_recv_msg[5] == 0xFF) {
+      if(can_recv_msg[4] == 0xFF) {
           gFlag |= _BV(IMD_STATUS);
-      } else {
-          gFlag &= ~_BV(IMD_STATUS);
       }
 
 
@@ -299,15 +295,11 @@ void updateStateFromFlags(void) {
     // Check AMS light
     if((bit_is_set(gFlag, AMS_LIGHT))) {
         PORT_AMS |= _BV(AMS_PIN);
-    } else {
-        PORT_AMS &= ~_BV(AMS_PIN);
     }
 
     // Check IMD light
     if((bit_is_set(gFlag, IMD_STATUS))) {
         PORT_IMD |= _BV(IMD_PIN);
-    } else {
-        PORT_IMD &= ~_BV(IMD_PIN);
     }
 }
 
@@ -354,14 +346,14 @@ int main(void){
 
     // uint8_t count = 0;
 
-    OCR1B = 216;
+    // OCR1B = curr_SoC;
 
     while(1) {
         if(bit_is_set(gFlag, UPDATE_STATUS)) {
             PORT_EXT_LED_ORANGE ^= _BV(EXT_LED_ORANGE);     // Blink Orange LED for timing check
             PORT_LED1 ^= _BV(LED1_PIN);
 
-            // updateStateFromFlags();
+            updateStateFromFlags();
             checkShutdownState();
 
 

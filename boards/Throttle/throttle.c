@@ -228,10 +228,12 @@ ISR(TIMER0_COMPA_vect) {
         // 14Hz *.1 = 4 cycles
         if(imp_error > 5){
             gFlag |= _BV(FLAG_PANIC);
-        }
-    } else {
-        imp_error = 0;
-    }
+          } else {
+            gFlag &= ~_BV(FLAG_PANIC);
+          }
+      } else {
+          imp_error = 0;
+      }
 
 
 }
@@ -441,7 +443,8 @@ void mapAndStoreThrottle(void){
     uint32_t throttle2 = gThrottle16[1];
 
     if(throttle1 > 900 || throttle2 > 900){
-        gFlag |= _BV(FLAG_PANIC);
+        gThrottle[0] = 0x00;
+        gThrottle[1] = 0x00;
         return;
     }
 
@@ -537,7 +540,7 @@ void mapAndStoreThrottle(void){
         gFlag &= ~_BV(FLAG_THROTTLE_BRAKE);
     }
 
-    
+
     if (bit_is_clear(gFlag, FLAG_BRAKE) && bit_is_clear(gFlag,FLAG_THROTTLE_BRAKE) && bit_is_set(gFlag,FLAG_MOTOR_ON) ) {
         gThrottle[0] = throttle1_mapped;
         gThrottle[1] = throttle2_mapped;
@@ -546,7 +549,7 @@ void mapAndStoreThrottle(void){
         gThrottle[1] = 0x00;
         // gFlag |= _BV(FLAG_THROTTLE_BRAKE);
     }
-    
+
 }
 
 void sendCanMessages(int viewCan){
@@ -632,7 +635,7 @@ int main(void){
     // RTD_PORT |= _BV(RTD_LD);
     // _delay_ms(400);
     // RTD_PORT &= ~(_BV(RTD_LD));
-    
+
     _delay_ms(1000);
     CAN_transmit(MOB_MOTORCONTROLLER,
                  CAN_ID_MC_COMMAND,
