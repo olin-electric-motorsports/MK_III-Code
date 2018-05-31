@@ -590,8 +590,8 @@ void sendCanMessages(int viewCan){
     gCANMotorController[7] = 0x00;
 
     CAN_transmit(MOB_MOTORCONTROLLER,
-                 CAN_ID_MOTORCONTROLLER,
-                 CAN_LEN_MOTORCONTROLLER,
+                 CAN_ID_MC_COMMAND,
+                 CAN_LEN_MC_COMMAND,
                  gCANMotorController);
     if(viewCan){
         char msg1[128];
@@ -644,6 +644,13 @@ int main(void){
     // RTD_PORT |= _BV(RTD_LD);
     // _delay_ms(400);
     // RTD_PORT &= ~(_BV(RTD_LD));
+
+    //In order to enable the motor controller, we must first send a byte disabling it (this is by RMS design to prevent accidental enbaling)
+    _delay_ms(1000);
+    CAN_transmit(MOB_MOTORCONTROLLER,
+                 CAN_ID_MC_COMMAND,
+                 CAN_LEN_MC_COMMAND,
+                 gCANMotorController);
 
     CAN_wait_on_receive(MOB_DASHBOARD,
                         CAN_ID_DASHBOARD,

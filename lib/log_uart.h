@@ -41,7 +41,7 @@
  * ```
  */
 
-extern char uart_buffer[1024];
+//extern char uart_buffer[1024];
 
 /// Initialize Logging over UART at 6250 baud (given that your clkio is 4MHz)
 void LOG_init(void);
@@ -54,4 +54,3 @@ void LOG_println(char *data, uint8_t data_len);
 
 /// Wait for a character to be received over UART
 uint8_t LOG_block_read(void);
-
