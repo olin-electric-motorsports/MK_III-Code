@@ -37,11 +37,11 @@ uint8_t imd_delay_threshold = 50; //wait a bit before checking imd status
 
 /*----- Macro Definitions -----*/
 //for gFlag
-#define print_voltage      1
-#define send_can           2
-#define imd_status         3
-#define imd_shutdown       4
-#define imd_delay_over     5
+#define print_voltage      0
+#define send_can           1
+#define imd_status         2
+#define imd_shutdown       3
+#define imd_delay_over     4
 
 //interrupts for shutdown and imd imd_status
 #define imd_sd_pin          PCINT22
@@ -68,12 +68,12 @@ uint8_t imd_delay_threshold = 50; //wait a bit before checking imd status
 #define MOB_PANIC 2 //Panic MOB for BMS to open shutdown circuit
 
 // CAN Message
-volatile uint8_t gCANMessage[5] = {0, 0, 0, 0, 0};
-#define precharge_complete    1
-#define sd_main_pack_conn     2
-#define sd_conn_to_hvd        3
-#define sd_bms                4
-#define sd_imd                5
+uint8_t gCANMessage[5] = {0, 0, 0, 0, 0};
+#define precharge_complete    0
+#define sd_main_pack_conn     1
+#define sd_conn_to_hvd        2
+#define sd_bms                3
+#define sd_imd                4
 
 //Setup 8 bit timer
 //helpful reference http://exploreembedded.com/wiki/AVR_Timer_programming
@@ -163,8 +163,8 @@ int main(void){
 
   //interrupts
   PCICR |= _BV(PCIE0) | _BV(PCIE2);
-  PCMSK0 |= _BV(conn_to_hvd_pin)
-  PCMSK2 |= _BV(imd_sd_pin7) | _BV(main_pack_conn_pin) | _BV(imd_status_pin);
+  PCMSK0 |= _BV(conn_to_hvd_pin);
+  PCMSK2 |= _BV(imd_sd_pin) | _BV(main_pack_conn_pin) | _BV(imd_status_pin);
 
   //other IO stuff
   DDRB |= _BV(LED1) | _BV(LED2); //Set on board programming LEDs as uptputs
