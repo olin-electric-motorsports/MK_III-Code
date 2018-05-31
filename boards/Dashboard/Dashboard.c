@@ -53,6 +53,7 @@ Author:
 #define BRAKE_LIGHT_MBOX            0
 #define BMS_MBOX                    1
 #define AIR_MBOX                    2
+#define DLEFT_MBOX                  3
 
 
 
@@ -81,6 +82,9 @@ uint8_t curr_temp;      // Temp
 uint8_t curr_volt;      // Voltage
 uint8_t curr_current;   // Current
 uint8_t curr_SoC;       // State of charge
+
+uint8_t throttle = 0;
+uint8_t charge = 255;
 
 
 
@@ -139,6 +143,7 @@ ISR(CAN_INT_vect) {
       curr_temp = can_recv_msg[2];
       curr_current = can_recv_msg[4];
       curr_SoC = can_recv_msg[5];
+      OCR1B = can_recv_msg[5];
 
 
       // If AMS shutdown is true, make AMS_PIN high
@@ -176,6 +181,28 @@ ISR(CAN_INT_vect) {
       CANSTMOB = 0x00;
       CAN_wait_on_receive(AIR_MBOX, CAN_ID_AIR_CONTROL, CAN_LEN_AIR_CONTROL, CAN_IDM_single);
     }
+
+    CANPAGE = (DLEFT_MBOX << MOBNB0);
+    if(bit_is_set(CANSTMOB, RXOK)) {
+        can_recv_msg[0] = CANMSG;   // throttle
+        can_recv_msg[1] = CANMSG;   // steering
+        can_recv_msg[2] = CANMSG;   // bots
+        can_recv_msg[3] = CANMSG;   // inertia
+        can_recv_msg[4] = CANMSG;   // estop
+
+        throttle = can_recv_msg[0];
+        OCR1A = can_recv_msg[0];
+
+        PORT_EXT_LED_GREEN ^= _BV(EXT_LED_GREEN);     // Blink Orange LED for timing check
+
+
+
+        //Setup to Receive Again
+        CANSTMOB = 0x00;
+        CAN_wait_on_receive(DLEFT_MBOX, CAN_ID_THROTTLE, CAN_LEN_THROTTLE, CAN_IDM_single);
+    }
+
+
 }
 
 ISR(PCINT0_vect) {
@@ -190,9 +217,19 @@ ISR(PCINT0_vect) {
     }
 }
 
+ISR(PCINT1_vect) {
+
+    if(bit_is_set(PINC,PC1)){
+        PORTD |= _BV(PD3);
+    }else{
+        PORTD &= ~_BV(PD3);
+    }
+
+}
+
 ISR(TIMER0_COMPA_vect) {
     // Only send CAN msgs every 20 cycles
-    if(gClock_prescale > 20) {
+    if(gClock_prescale > 10) {
         gFlag |= _BV(UPDATE_STATUS);
         gClock_prescale = 0;
     }
@@ -216,19 +253,29 @@ void initIO(void) {
 
 
     /* Setup interrupt registers */
-    PCICR |= _BV(PCIE0);
+    PCICR |= _BV(PCIE0) | _BV(PCIE1);
     PCMSK0 |= _BV(PCINT2);
+    PCMSK1 |= _BV(PCINT9);
 
     /*----- Setup PWM output -----*/
     //Output compare pin is OC1B, so we need OCR1B as our counter
-    TCCR1B |= _BV(CS00); //Clock prescale set to max speed
-    TCCR1B |= _BV(WGM12);
-    TCCR1A |= _BV(COM1B1) | _BV(WGM10); // Fast PWM 8-bit mode
-    TCCR1A &= ~_BV(COM1B0); // Set on match, clear on top
     DDRD |= _BV(PD2); //Enable output pin
     DDRD |= _BV(PD3); //Enable output pin
+    DDRC |= _BV(PC1);
 
-    OCR1A = (uint8_t) 200;      // Duty Cycle
+    // pg 119 and 110 of datasheet
+    // currently running on mode 5 for 8-bit resolution timer
+    // turns on when counter hits OCRnx and off when hits top (255)
+    TCCR1A |= _BV(COM1A1) | _BV(COM1A0) | _BV(COM1B1) | _BV(COM1B0) | _BV(WGM10);
+    TCCR1A &= ~_BV(WGM11) & ~_BV(COM1A0) & ~_BV(COM1B0);
+    TCCR1B |= _BV(CS10); //Clock prescale set to max speed
+    TCCR1B |= _BV(WGM12);
+    TCCR1B &= ~_BV(WGM13);
+
+
+    // OCR1A = (uint8_t) 30;      // Duty Cycle
+    // OCR1B = (uint8_t) 255;      // Duty Cycle
+
 }
 
 void checkShutdownState(void)   {
@@ -250,21 +297,34 @@ void updateStateFromFlags(void) {
     Based off the state of the flag(s), update components and send CAN
     */
     // Check AMS light
-    if(!(bit_is_set(gFlag, AMS_LIGHT))) {
+    if((bit_is_set(gFlag, AMS_LIGHT))) {
         PORT_AMS |= _BV(AMS_PIN);
     } else {
         PORT_AMS &= ~_BV(AMS_PIN);
     }
 
     // Check IMD light
-    if(!(bit_is_set(gFlag, IMD_STATUS))) {
+    if((bit_is_set(gFlag, IMD_STATUS))) {
         PORT_IMD |= _BV(IMD_PIN);
     } else {
         PORT_IMD &= ~_BV(IMD_PIN);
     }
 }
 
-//TODO any other functionality goes here
+void initADC(void) {
+    //Get the Analog to Digital Converter started (ADC)
+    ADCSRA |= _BV(ADEN) | _BV(ADPS2) | _BV(ADPS0);
+
+    //Enable interal reference voltage
+    ADCSRB &= _BV(AREFEN);
+
+    //Set internal reference voltage as AVcc
+    ADMUX |= _BV(REFS0);
+
+    //Reads by default from ADC0 (pin 11)
+    //This line is redundant. The timer
+    ADMUX |= _BV(0x00);
+}
 
 
 /*----- MAIN -----*/
@@ -281,22 +341,28 @@ int main(void){
 
     // CAN Enable
     CAN_init(CAN_ENABLED);
+    // CBN Enable
+
     CAN_wait_on_receive(BRAKE_LIGHT_MBOX, CAN_ID_BRAKE_LIGHT, CAN_LEN_BRAKE_LIGHT, CAN_IDM_single);
     CAN_wait_on_receive(BMS_MBOX, CAN_ID_BMS_MASTER, CAN_LEN_BMS_MASTER, CAN_IDM_single);
     CAN_wait_on_receive(AIR_MBOX, CAN_ID_AIR_CONTROL, CAN_LEN_AIR_CONTROL, CAN_IDM_single);
+    CAN_wait_on_receive(AIR_MBOX, CAN_ID_AIR_CONTROL, CAN_LEN_AIR_CONTROL, CAN_IDM_single);
+    CAN_wait_on_receive(DLEFT_MBOX, CAN_ID_THROTTLE, CAN_LEN_THROTTLE, CAN_IDM_single);
 
     initTimer();                        // Initialize Timer
     gFlag |= _BV(UPDATE_STATUS);        // Read ports
+
+    // uint8_t count = 0;
+
+    OCR1B = 216;
 
     while(1) {
         if(bit_is_set(gFlag, UPDATE_STATUS)) {
             PORT_EXT_LED_ORANGE ^= _BV(EXT_LED_ORANGE);     // Blink Orange LED for timing check
             PORT_LED1 ^= _BV(LED1_PIN);
 
-            updateStateFromFlags();
+            // updateStateFromFlags();
             checkShutdownState();
-
-            OCR1A = curr_SoC;       // Update current State of Charge
 
 
             if(bit_is_set(gFlag, BRAKE_PRESSED) && bit_is_set(gFlag, TSMS_CLOSED)) {
