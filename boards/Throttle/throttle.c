@@ -235,6 +235,9 @@ ISR(TIMER0_COMPA_vect) {
           imp_error = 0;
       }
 
+    //For motor calibration only
+    //Need to disable motor controller after running for a while ~30 seconds
+    compare_count++;
 
 }
 
@@ -574,7 +577,7 @@ void sendCanMessages(int viewCan){
     gCANMotorController[1] = mc_remap >> 8;
     gCANMotorController[2] = 0x00;
     gCANMotorController[3] = 0x00;
-    gCANMotorController[4] = 1;
+    gCANMotorController[4] = 0x01;
     gCANMotorController[5] = bit_is_set(gFlag,FLAG_MOTOR_ON) ? 0x01 : 0x00;
     gCANMotorController[6] = 0x00;
     gCANMotorController[7] = 0x00;
@@ -658,6 +661,13 @@ int main(void){
                         CAN_ID_BRAKE_LIGHT,
                         CAN_LEN_BRAKE_LIGHT,
                         CAN_IDM_single);
+
+    // Clear CAN lockout?
+    _delay_ms(1000);
+    CAN_transmit(MOB_MOTORCONTROLLER,
+                 CAN_ID_MC_COMMAND,
+                 CAN_LEN_MC_COMMAND,
+                 gCANMotorController);
 
     while(1){
         if(bit_is_set(gTimerFlag,UPDATE_STATUS)){
