@@ -63,6 +63,7 @@ Author:
 #define TSMS_CLOSED                 3
 #define AMS_LIGHT                   4
 #define IMD_STATUS                  5
+#define PRECHARGE                   6
 
 
 #define UPDATE_STATUS               0
@@ -167,6 +168,10 @@ ISR(CAN_INT_vect) {
       // Grab IMD status
       if(can_recv_msg[4] == 0xFF) {
           gFlag |= _BV(IMD_STATUS);
+      }
+
+      if(can_recv_msg[0] == 0xFF){
+          gFlag |= _BV(PRECHARGE);
       }
 
 
@@ -349,21 +354,22 @@ int main(void){
 
     while(1) {
         if(bit_is_set(gFlag, UPDATE_STATUS)) {
-            PORT_EXT_LED_ORANGE ^= _BV(EXT_LED_ORANGE);     // Blink Orange LED for timing check
+            // PORT_EXT_LED_ORANGE ^= _BV(EXT_LED_ORANGE);     // Blink Orange LED for timing check
             PORT_LED1 ^= _BV(LED1_PIN);
 
             updateStateFromFlags();
             checkShutdownState();
 
 
-            if(bit_is_set(gFlag, BRAKE_PRESSED) && bit_is_set(gFlag, TSMS_CLOSED) && bit_is_set(gFlag,STATUS_START)) {
-                CAN_transmit(5, CAN_ID_DASHBOARD, CAN_LEN_DASHBOARD, gCAN_MSG);
+            if(bit_is_set(gFlag, BRAKE_PRESSED) && bit_is_set(gFlag, PRECHARGE) && bit_is_set(gFlag,STATUS_START)) {
+                gCAN_MSG[0] = 0xFF;
+                CAN_transmit(4, CAN_ID_DASHBOARD, CAN_LEN_DASHBOARD, gCAN_MSG);
                 PORT_EXT_LED_GREEN |= _BV(EXT_LED_GREEN);     // Blink Orange LED for timing check
 
             }
 
 
-            if(bit_is_set(gFlag, TSMS_CLOSED)) {
+            if(bit_is_set(gFlag, BRAKE_PRESSED)) {
                 PORT_EXT_LED_ORANGE |= _BV(EXT_LED_ORANGE);
             }
             gFlag &= ~_BV(UPDATE_STATUS);  // Clear Flag

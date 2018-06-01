@@ -301,7 +301,7 @@ void updateStateFromFlags(void) {
     //Based off of ready to drive sound rules (pg113)
     if(bit_is_set(gFlag,FLAG_MOTOR_ON) && buzzerSet == 0){
         RTD_PORT |= _BV(RTD_LD);
-        _delay_ms(3000);
+        _delay_ms(1000);
         RTD_PORT &= ~(_BV(RTD_LD));
         buzzerSet = 1;
     } else {
