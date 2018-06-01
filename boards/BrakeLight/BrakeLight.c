@@ -20,6 +20,7 @@ Author:
 /* Brake */
 #define BRAKE_PIN           PB5
 #define PORT_BRAKE          PORTB
+#define PIN_BRAKE           PINB
 #define ANALOG_BRAKE_PIN    PB7
 #define ANALOG_BRAKE_PORT   PORTB
 
@@ -41,6 +42,13 @@ Author:
 #define PORT_BSPD           PORTD
 #define PORT_HVD            PORTD
 #define PORT_TSMS           PORTB
+
+#define PIN_MAIN_FUSE      PINB
+#define PIN_LEFT_E_STOP    PINB
+#define PIN_RIGHT_E_STOP   PIND
+#define PIN_BSPD           PIND
+#define PIN_HVD            PIND
+#define PIN_TSMS           PINB
 
 /* CAN Positions */
 #define CAN_BRAKE           0
@@ -132,23 +140,26 @@ ISR(PCINT0_vect) {
     covers interupts 0-3
     Interupts covered: Main Shutdown Fuse, Left E-Stop, TSMS, & Brake
     */
-    if(PORT_MAIN_FUSE, SD_MAIN_FUSE) {
+    if(bit_is_set(PIN_MAIN_FUSE, SD_MAIN_FUSE)) {
         gFlag |= _BV(STATUS_MAIN_FUSE);
     } else {
         gFlag &= ~_BV(STATUS_MAIN_FUSE);
     }
-    if(PORT_LEFT_E_STOP, SD_LEFT_E_STOP) {
+
+    if(bit_is_set(PIN_LEFT_E_STOP, SD_LEFT_E_STOP)) {
         gFlag |= _BV(STATUS_LEFT_E_STOP);
     } else {
         gFlag &= ~_BV(STATUS_LEFT_E_STOP);
     }
-    if(PORT_TSMS, SD_TSMS) {
+
+    if(bit_is_set(PIN_TSMS, SD_TSMS)) {
         gTSMS = PORT_TSMS & SD_TSMS;
         gFlag |= _BV(STATUS_TSMS);
     } else {
         gFlag &= ~_BV(STATUS_TSMS);
     }
-    if(PORT_BRAKE, BRAKE_PIN) {
+
+    if(bit_is_set(PIN_BRAKE, BRAKE_PIN)) {
         gFlag |= _BV(STATUS_BRAKE);
     } else {
         gFlag &= ~_BV(STATUS_BRAKE);
@@ -161,17 +172,19 @@ ISR(PCINT2_vect) {
     covers interupts 21-23
     Interupts covered: Right E-Stop, BSPD, HVD
     */
-    if(PORT_RIGHT_E_STOP, SD_RIGHT_E_STOP) {
+    if(bit_is_set(PIN_RIGHT_E_STOP, SD_RIGHT_E_STOP)) {
         gFlag |= _BV(STATUS_RIGHT_E_STOP);
     } else {
         gFlag &= ~_BV(STATUS_RIGHT_E_STOP);
     }
-    if(PORT_BSPD, PORT_BSPD) {
+
+    if(bit_is_set(PIN_BSPD, SD_BSPD)) {
         gFlag |= _BV(STATUS_BSPD);
     } else {
         gFlag &= -_BV(STATUS_BSPD);
     }
-    if(PORT_HVD, PORT_HVD) {
+
+    if(bit_is_set(PIN_HVD, SD_HVD)) {
         gFlag |= _BV(STATUS_HVD);
     } else {
         gFlag &= -_BV(STATUS_HVD);
@@ -328,3 +341,4 @@ int main(void){
         }
     }
 }
+
