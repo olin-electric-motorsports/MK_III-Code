@@ -17,6 +17,10 @@ volatile uint8_t msg[8]; //adding this for troubleshooting throttle
 //CAN message objects
 #define MOB 0
 
+//which board do you want to listen to
+#define CAN_LEN    CAN_LEN_MC_COMMAND
+#define CAN_ID      CAN_ID_MC_COMMAND
+
 //CAN message
 uint8_t gCANMessage[8] = {0, 0, 0, 0, 0, 0, 0, 0};
 uint8_t gCANBMSMessage[6] = {0,0,0,0,0,0};
@@ -42,19 +46,14 @@ ISR(CAN_INT_vect) {
   //adding this for troubleshooting throttle messages
   CANPAGE = (MOB << MOBNB0);
   if (bit_is_set(CANSTMOB,RXOK)) {
-      msg[0] = CANMSG;
-      msg[1] = CANMSG;
-      msg[2] = CANMSG;
-      msg[3] = CANMSG;
-      msg[4] = CANMSG;
-      msg[5] = CANMSG;
-      msg[6] = CANMSG;
-      msg[7] = CANMSG;
+      for(uint8_t i = 0; i < CAN_LEN; i++) {
+        msg[i] = CANMSG;
+      }
 
       CANSTMOB = 0x00;
       CAN_wait_on_receive(MOB,
-                          CAN_ID_MC_COMMAND,
-                          CAN_LEN_MC_COMMAND,
+                          CAN_ID,
+                          CAN_LEN,
                           CAN_IDM_single);
   }
 }
@@ -67,11 +66,11 @@ int main(void){
   LOG_init();
   CAN_init(CAN_ENABLED);
 
-  DDRB |= _BV(PB0);
+  //DDRB |= _BV(PB0);
 
   CAN_wait_on_receive(MOB,
-                      CAN_ID_MC_COMMAND,
-                      CAN_LEN_MC_COMMAND,
+                      CAN_ID,
+                      CAN_LEN,
                       CAN_IDM_single);
 
   while(1) {
@@ -79,10 +78,10 @@ int main(void){
       gFlag = 0x00;
       char disp_string[128];
       //sprintf(disp_string,"%u messages received!",msg_count);
-      sprintf(disp_string,"CAN message to motorcontroller:\n%d\n%d\n%d\n%d\n%d\n%d\n%d\n%d",
+      sprintf(disp_string,"CAN message: %d, %d, %d, %d, %d, %d, %d, %d",
       msg[0],msg[1],msg[2],msg[3],msg[4],msg[5],msg[6],msg[7]);
       LOG_println(disp_string,strlen(disp_string));
-      PORTB ^= _BV(PB0);
+      //PORTB ^= _BV(PB0);
     }
   }
 }
