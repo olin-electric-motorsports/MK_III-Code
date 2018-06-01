@@ -51,8 +51,8 @@ Author:
 #define PIN_TSMS           PINB
 
 /* CAN Positions */
-#define CAN_BRAKE           0
-#define CAN_BRAKE_POS       1
+#define CAN_BRAKE           1
+#define CAN_BRAKE_POS       0
 #define CAN_BSPD            2
 #define CAN_HVD             3
 #define CAN_TSMS            4
@@ -113,7 +113,7 @@ uint8_t brake_LOW = 0xD3;        //TODO change with actual values
 // 8-bit Timer
 ISR(TIMER0_COMPA_vect) {
     // Only send CAN msgs every 20 cycles
-    if(clock_prescale > 20) {
+    if(clock_prescale > 4) {
         gTimerFlag |= _BV(UPDATE_STATUS);
         clock_prescale = 0;
     }
@@ -226,7 +226,7 @@ static inline void updateStateFromFlags(void) {
         if(bit_is_clear(BSPD_STATUS_PORT, BSPD_STATUS_PIN)) {
             gCAN_MSG[0] = 0xFF;
             // Send Global Panic
-            CAN_transmit(BROADCAST_MOb, CAN_ID_PANIC,
+            CAN_transmit(4, CAN_ID_PANIC,
                 CAN_LEN_PANIC, gCAN_MSG);
             gCAN_MSG[CAN_BSPD] = 0xFF;
         }
@@ -242,7 +242,7 @@ static inline void updateStateFromFlags(void) {
 
     if(bit_is_set(gFlag, STATUS_TSMS)) {
         if(gTSMS != gTSMS_OLD) {
-            gCAN_MSG[CAN_TSMS] = gTSMS;
+            gCAN_MSG[CAN_TSMS] = 0xFF;
             gTSMS_OLD = gTSMS;
         }
     }
@@ -276,24 +276,24 @@ void initADC(void) {
 static inline void mapBrakePos() {
     /* This function polls the brake position and maps it to
         a byte for sending over CAN. In range [0x00, 0xFF] */
-    ADMUX = _BV(REFS0);
-    ADMUX |= 6; //pin is also known as ADC6
-    ADCSRA |= _BV(ADSC);
-    loop_until_bit_is_clear(ADCSRA, ADSC);
-    uint8_t brake_pos_adc = ADC << 2;
-
-    // Check for brake analog fault
-    if(brake_pos_adc == 0) {
-        gCAN_MSG[0] = 0xFF;
-        // Send Global Panic
-        CAN_transmit(BROADCAST_MOb, CAN_ID_PANIC,
-            CAN_LEN_PANIC, gCAN_MSG);
-    }
-
-    if(bit_is_set(gTimerFlag, SEND_BRAKE)) {
-        uint8_t mapped = ((brake_pos_adc - brake_LOW) * 0xFF) / (brake_HIGH - brake_LOW);
-        gCAN_MSG[CAN_BRAKE_POS] = mapped;
-    }
+    // ADMUX = _BV(REFS0);
+    // ADMUX |= 6; //pin is also known as ADC6
+    // ADCSRA |= _BV(ADSC);
+    // loop_until_bit_is_clear(ADCSRA, ADSC);
+    // uint8_t brake_pos_adc = ADC << 2;
+    //
+    // // Check for brake analog fault
+    // if(brake_pos_adc == 0) {
+    //     gCAN_MSG[0] = 0xFF;
+    //     // Send Global Panic
+    //     CAN_transmit(BROADCAST_MOb, CAN_ID_PANIC,
+    //         CAN_LEN_PANIC, gCAN_MSG);
+    // }
+    //
+    // if(bit_is_set(gTimerFlag, SEND_BRAKE)) {
+    //     uint8_t mapped = ((brake_pos_adc - brake_LOW) * 0xFF) / (brake_HIGH - brake_LOW);
+    //     gCAN_MSG[CAN_BRAKE_POS] = mapped;
+    // }
 }
 
 
@@ -308,7 +308,7 @@ int main(void){
     */
     sei();                              // Enable interrupts
     CAN_init(CAN_ENABLED);
-    initADC();
+    // initADC();
 
     DDRC |= _BV(LED1) | _BV(LED2) | _BV(EXT_LED_ORANGE);
     DDRD |= _BV(EXT_LED_GREEN) | _BV(PD3);
@@ -323,17 +323,20 @@ int main(void){
     initTimer_8bit();                       // Begin 8-bit timer
     gTimerFlag |= _BV(UPDATE_STATUS);        // Read ports
 
+
+
     while(1) {
         // PORT_LED1 |= _BV(LED1);
         if(bit_is_set(gTimerFlag, UPDATE_STATUS)) {
             PORT_LED1 ^= _BV(LED1);     // Blink Orange LED for timing check
+            PORT_EXT_LED_ORANGE ^= _BV(EXT_LED_ORANGE);
 
             updateStateFromFlags();     // Build CAN message based off flags
             gTimerFlag &= ~_BV(UPDATE_STATUS);  // Clear Flag
 
             mapBrakePos();
             // Send CAN message
-            CAN_transmit(BROADCAST_MOb, CAN_ID_BRAKE_LIGHT,
+            CAN_transmit(5, CAN_ID_BRAKE_LIGHT,
                 CAN_LEN_BRAKE_LIGHT, gCAN_MSG);
 
             // send_LED_bar();
@@ -341,4 +344,3 @@ int main(void){
         }
     }
 }
-

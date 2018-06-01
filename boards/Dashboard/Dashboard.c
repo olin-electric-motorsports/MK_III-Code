@@ -110,7 +110,7 @@ ISR(CAN_INT_vect) {
             gFlag &= ~_BV(BRAKE_PRESSED);          //reset flag
         }
 
-        if(can_recv_msg[5] == 0xFF) {
+        if(can_recv_msg[4] == 0xFF) {
             gFlag |= _BV(TSMS_CLOSED);
         } else {
             gFlag &= ~_BV(TSMS_CLOSED);
@@ -189,7 +189,6 @@ ISR(CAN_INT_vect) {
         throttle = can_recv_msg[0];
         OCR1A = can_recv_msg[0];
 
-        PORT_EXT_LED_GREEN ^= _BV(EXT_LED_GREEN);     // Blink Orange LED for timing check
 
 
 
@@ -206,7 +205,8 @@ ISR(PCINT0_vect) {
     Standard Pin Change Interupt
     Covers Interrupts: Start Button
     */
-    if(PORT_START, START_PIN) {
+    if(bit_is_set(PINB,START_PIN)) {
+
         gFlag |= _BV(STATUS_START);
     } else {
         gFlag &= ~_BV(STATUS_START);
@@ -338,7 +338,6 @@ int main(void){
     CAN_wait_on_receive(BRAKE_LIGHT_MBOX, CAN_ID_BRAKE_LIGHT, CAN_LEN_BRAKE_LIGHT, CAN_IDM_single);
     CAN_wait_on_receive(BMS_MBOX, CAN_ID_BMS_MASTER, CAN_LEN_BMS_MASTER, CAN_IDM_single);
     CAN_wait_on_receive(AIR_MBOX, CAN_ID_AIR_CONTROL, CAN_LEN_AIR_CONTROL, CAN_IDM_single);
-    CAN_wait_on_receive(AIR_MBOX, CAN_ID_AIR_CONTROL, CAN_LEN_AIR_CONTROL, CAN_IDM_single);
     CAN_wait_on_receive(DLEFT_MBOX, CAN_ID_THROTTLE, CAN_LEN_THROTTLE, CAN_IDM_single);
 
     initTimer();                        // Initialize Timer
@@ -357,13 +356,15 @@ int main(void){
             checkShutdownState();
 
 
-            if(bit_is_set(gFlag, BRAKE_PRESSED) && bit_is_set(gFlag, TSMS_CLOSED)) {
-                CAN_transmit(0, CAN_ID_DASHBOARD, CAN_LEN_DASHBOARD, gCAN_MSG);
+            if(bit_is_set(gFlag, BRAKE_PRESSED) && bit_is_set(gFlag, TSMS_CLOSED) && bit_is_set(gFlag,STATUS_START)) {
+                CAN_transmit(5, CAN_ID_DASHBOARD, CAN_LEN_DASHBOARD, gCAN_MSG);
+                PORT_EXT_LED_GREEN |= _BV(EXT_LED_GREEN);     // Blink Orange LED for timing check
+
             }
 
 
             if(bit_is_set(gFlag, TSMS_CLOSED)) {
-                PORT_EXT_LED_GREEN ^= _BV(EXT_LED_GREEN);
+                PORT_EXT_LED_ORANGE |= _BV(EXT_LED_ORANGE);
             }
             gFlag &= ~_BV(UPDATE_STATUS);  // Clear Flag
         }
