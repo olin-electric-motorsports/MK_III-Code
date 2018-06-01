@@ -47,8 +47,8 @@ Author:
 #define LED3                    PB4
 #define LED3_PORT               PORTB
 
-#define EXT_LED1                PB0
-#define EXT_LED2                PB1
+#define EXT_LED_ORANGE          PB0
+#define EXT_LED_GREEN           PB1
 #define EXT_LED_PORT            PORTB
 
 /* CAN Positions */
@@ -130,13 +130,16 @@ uint16_t throttle_10_count = 0x00;
 uint8_t clock_prescale = 0x00;
 uint8_t timer_counter = 0x00;
 uint32_t imp_error = 0x00;
-int buzzerSet = 0;
+uint8_t buzzerSet = 0;
 
 /*----- Interrupt(s) -----*/
 // *pg 76 of datasheet*
 // https://github.com/olin-electric-motorsports/MK_II-Code/tree/master/lib
 // https://github.com/olin-electric-motorsports/MK_III-Code/tree/master/lib
 ISR(CAN_INT_vect) {
+    EXT_LED_PORT ^= _BV(EXT_LED_ORANGE);
+
+
     /*
     CAN Interupt
     -Check bits to see if they are set
@@ -149,7 +152,9 @@ ISR(CAN_INT_vect) {
     // Brakelight
     CANPAGE = (MOB_BRAKELIGHT << MOBNB0);
     if (bit_is_set(CANSTMOB,RXOK)) {
-        volatile int8_t msg = CANMSG;
+
+        volatile uint8_t msg = CANMSG;
+        msg = CANMSG;
 
         if(msg == 0xFF){
             gFlag |= _BV(FLAG_BRAKE);
@@ -168,7 +173,7 @@ ISR(CAN_INT_vect) {
     //Start button
     CANPAGE = (MOB_DASHBOARD << MOBNB0);
     if (bit_is_set(CANSTMOB,RXOK)) {
-        volatile int8_t msg = CANMSG;
+        volatile uint8_t msg = CANMSG;
 
         if(msg == 0xFF){
             gFlag |= _BV(FLAG_MOTOR_ON);
@@ -311,6 +316,12 @@ void updateStateFromFlags(void) {
         LED3_PORT |= _BV(LED3);
 
         //DO MORE
+    }
+
+    if(bit_is_set(gFlag,FLAG_MOTOR_ON)){
+        EXT_LED_PORT |= _BV(EXT_LED_GREEN);
+    } else {
+        EXT_LED_PORT &= ~_BV(EXT_LED_GREEN);
     }
 
 
@@ -600,7 +611,7 @@ void sendCanMessages(int viewCan){
     }
 
 
-    // EXT_LED_PORT ^= _BV(EXT_LED2);
+    // EXT_LED_PORT ^= _BV(EXT_LED_GREEN);
 }
 
 
@@ -619,6 +630,11 @@ int main(void){
     LOG_init();
     CAN_init(CAN_ENABLED);
 
+    //////////////////////////////////////////////////////
+    // DELETE BEFORE RUNNING!!!!!!!!!!!!!
+    // gFlag |= _BV(FLAG_MOTOR_ON);
+    // buzzerSet = 1;
+
     // Set interrupt registers
     PCICR |= _BV(PCIE0);
     PCMSK0 |= _BV(PCINT5) | _BV(PCINT6) | _BV(PCINT7);
@@ -627,7 +643,7 @@ int main(void){
     DDRC |= _BV(LED1);
     DDRB |= _BV(LED2) | _BV(LED3);
     DDRC |= _BV(RTD_LD);
-    DDRB |= _BV(EXT_LED1) | _BV(EXT_LED2);
+    DDRB |= _BV(EXT_LED_ORANGE) | _BV(EXT_LED_GREEN);
 
     // set pull up resistor for steering
     STEERING_PORT |= _BV(STEERING);
@@ -639,11 +655,7 @@ int main(void){
     // _delay_ms(400);
     // RTD_PORT &= ~(_BV(RTD_LD));
 
-    _delay_ms(1000);
-    CAN_transmit(MOB_MOTORCONTROLLER,
-                 CAN_ID_MC_COMMAND,
-                 CAN_LEN_MC_COMMAND,
-                 gCANMotorController);
+
 
     //In order to enable the motor controller, we must first send a byte disabling it (this is by RMS design to prevent accidental enbaling)
     _delay_ms(1000);
@@ -671,7 +683,7 @@ int main(void){
 
     while(1){
         if(bit_is_set(gTimerFlag,UPDATE_STATUS)){
-            EXT_LED_PORT ^= _BV(EXT_LED1);
+            // EXT_LED_PORT ^= _BV(EXT_LED_ORANGE);
             gTimerFlag &= ~_BV(UPDATE_STATUS);
 
             checkShutdownState();
@@ -681,6 +693,11 @@ int main(void){
             updateStateFromFlags();
 
             sendCanMessages(0);
+
+            CAN_wait_on_receive(MOB_BRAKELIGHT,
+                                CAN_ID_BRAKE_LIGHT,
+                                CAN_LEN_BRAKE_LIGHT,
+                                CAN_IDM_single);
         }
     }
 }
