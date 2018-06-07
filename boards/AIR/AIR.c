@@ -188,14 +188,14 @@ int main(void){
   while(1){
     //Should I change this to interrupts? not sure, for loop seems like it might work fine but also this board does other stuff that I haven't implemented yet
     //If AIR - is closed (pin is high), start precharge sequence (pull precharge lsd high)
-    // if (bit_is_set(PINC, AIR_auxillary)) {
-    if(1) {
+    if (bit_is_set(PINC, AIR_auxillary)) {
+    // if(1) {
       // do precharge
       if (timer_ovf_count < precharge_threshold) {
         PORTC |= _BV(PRECHARGE_LSD);
         PORTD |= _BV(EXT_LED1);
         PORTB |= _BV(LED1);
-        // LOG_println("WAITING",strlen("WAITING"));
+        LOG_println("WAITING",strlen("WAITING"));
         // There is an interesting case here when timer_ovf_count resets because it's value gets too big for uint8_t
         // It doesn't affect operation but it's going to continuously cycle between this condition and the one below
       } else { // timer_ovf_count >= precharge_threshold)
@@ -203,7 +203,7 @@ int main(void){
         PORTC |= _BV(EXT_LED2);
         PORTB |= _BV(LED2);
         gCANMessage[precharge_complete] = 0xFF;
-        // LOG_println("Closed da air",strlen("Closed da air"));
+        LOG_println("Closed da air",strlen("Closed da air"));
 
       }
     } else { //otherwise set both relays LSDs low (open the relays) and reset overflow count
