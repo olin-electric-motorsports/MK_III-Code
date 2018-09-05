@@ -43,6 +43,7 @@ Learn how to git gud [here...](https://github.com/olin-electric-motorsports/Prog
 
 ## Useful Links
 -[How does Git/Github Work?](http://product.hubspot.com/blog/git-and-github-tutorial-for-beginners)
+- []
 
 -[Getting started in C](https://www.programiz.com/c-programming)
 
