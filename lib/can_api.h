@@ -27,7 +27,7 @@
 #define CAN_ID_MC_VOLTAGE        ((uint16_t) 0xA7)
 #define CAN_ID_MC_COMMAND        ((uint16_t) 0xC0)
 
-
+#define CAN_ID_BRAKE_PRESSURE    ((uint16_t) 0x16)
 
 
 /* Message Lengths */
@@ -51,6 +51,7 @@
 #define CAN_LEN_MC_VOLTAGE      ((uint16_t) 8)
 #define CAN_LEN_MC_COMMAND      ((uint16_t) 8)
 
+#define CAN_LEN_BRAKE_PRESSURE  ((uint16_t) 2)
 
 
 /* Masks */
