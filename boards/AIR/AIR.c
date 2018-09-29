@@ -6,6 +6,9 @@ The second is when the TS- AIR is closed (the shutdown circuit is complete). In 
 beginning the precharge sequence. An overflow interrupt on timer0 counts out 13 seconds (set by precharge_threshold). Once this time is exceeded,
 the TS+ AIR LSD is pulled high and a CAN message should be sent stating that precharge is complete.
 
+UPDATE 09/28/18:
+This code has been modified to be compatible with the rework to sense the AIR - shutdown lead using the HVD connector shutdown sense module.
+
 Author: Lucky Jordan
 */
 
@@ -48,7 +51,7 @@ uint8_t imd_delay_threshold = 50; //wait a bit before checking imd status
 //interrupts for shutdown and imd imd_status
 #define imd_sd_pin          PCINT22
 #define main_pack_conn_pin  PCINT23
-#define conn_to_hvd_pin     PCINT2
+// #define conn_to_hvd_pin     PCINT2
 #define imd_status_pin      PCINT17
 
 // On board LEDs
@@ -73,7 +76,7 @@ uint8_t imd_delay_threshold = 50; //wait a bit before checking imd status
 uint8_t gCANMessage[5] = {0, 0, 0, 0, 0};
 #define precharge_complete    0
 #define sd_main_pack_conn     1
-#define sd_conn_to_hvd        2
+// #define sd_conn_to_hvd        2
 #define sd_bms                3
 #define sd_imd                4
 
@@ -122,18 +125,19 @@ ISR(CAN_INT_vect) {
       CANSTMOB = 0x00;
       CAN_wait_on_receive(MOB_MOTORCONTROLLER,
                           CAN_ID_MC_VOLTAGE,
+
                           CAN_LEN_MC_VOLTAGE,
                           CAN_IDM_single);
   }
 }
 
-ISR(PCINT0_vect) {
-    if(bit_is_set(PINB,conn_to_hvd_pin)){
-        gCANMessage[sd_conn_to_hvd] = 0xFF;
-    } else {
-        gCANMessage[sd_conn_to_hvd] = 0x00;
-    }
-}
+// ISR(PCINT0_vect) {
+//     if(bit_is_set(PINB,conn_to_hvd_pin)){
+//         gCANMessage[sd_conn_to_hvd] = 0xFF;
+//     } else {
+//         gCANMessage[sd_conn_to_hvd] = 0x00;
+//     }
+// }
 
 ISR(PCINT2_vect) {
     if(bit_is_set(PIND,imd_sd_pin)){
@@ -169,7 +173,7 @@ int main(void){
 
   //interrupts
   PCICR |= _BV(PCIE0) | _BV(PCIE2);
-  PCMSK0 |= _BV(conn_to_hvd_pin);
+  // PCMSK0 |= _BV(conn_to_hvd_pin);
   PCMSK2 |= _BV(imd_sd_pin) | _BV(main_pack_conn_pin) | _BV(imd_status_pin);
 
   //other IO stuff
@@ -178,6 +182,8 @@ int main(void){
   DDRD |= _BV(EXT_LED1); //Set other external led as output
 
   DDRC &= ~_BV(AIR_auxillary); //Set auxillary air - contact sense as input
+  //Actually it's measuring a shutdown sense module connected to the low side AIR positive lead. HOPPE
+
   //if AIR is close immediately on startup send panic messasge
   if (bit_is_set(PINC, AIR_auxillary)) {
     CAN_transmit(MOB_PANIC,
@@ -193,8 +199,8 @@ int main(void){
   while(1){
     //Should I change this to interrupts? not sure, for loop seems like it might work fine but also this board does other stuff that I haven't implemented yet
     //If AIR - is closed (pin is high), start precharge sequence (pull precharge lsd high)
-    //if (bit_is_set(PINC, AIR_auxillary)) {
-    if (1) {
+    if (bit_is_set(PINC, AIR_auxillary)) {
+    // if (1) {
       // do precharge
       if (bit_is_clear(gFlag,drive_air_lsd)) {
         PORTC |= _BV(PRECHARGE_LSD);
