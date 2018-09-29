@@ -95,6 +95,7 @@ Author:
 volatile uint8_t gFlag = 0x01;          // Global Flag
 volatile uint8_t gTimerFlag = 0x01;     // Timer flag
 uint8_t gCAN_MSG[8] = {0, 0, 0, 0, 0, 0, 0, 0};  // CAN Message
+uint8_t gBrake_Pressure[2] = {0, 0}; //brake pressure value
 
 volatile uint8_t gTSMS = 0x00;
 volatile uint8_t gTSMS_OLD = 0x00;  // Used for comparison
@@ -273,27 +274,31 @@ void initADC(void) {
 }
 
 
-static inline void mapBrakePos() {
+static inline void mapBrakePressure() {
     /* This function polls the brake position and maps it to
         a byte for sending over CAN. In range [0x00, 0xFF] */
-    // ADMUX = _BV(REFS0);
-    // ADMUX |= 6; //pin is also known as ADC6
-    // ADCSRA |= _BV(ADSC);
-    // loop_until_bit_is_clear(ADCSRA, ADSC);
-    // uint8_t brake_pos_adc = ADC << 2;
-    //
-    // // Check for brake analog fault
-    // if(brake_pos_adc == 0) {
-    //     gCAN_MSG[0] = 0xFF;
-    //     // Send Global Panic
-    //     CAN_transmit(BROADCAST_MOb, CAN_ID_PANIC,
-    //         CAN_LEN_PANIC, gCAN_MSG);
-    // }
-    //
-    // if(bit_is_set(gTimerFlag, SEND_BRAKE)) {
-    //     uint8_t mapped = ((brake_pos_adc - brake_LOW) * 0xFF) / (brake_HIGH - brake_LOW);
-    //     gCAN_MSG[CAN_BRAKE_POS] = mapped;
-    // }
+     ADMUX = _BV(REFS0);
+     ADMUX |= 4; //pin is also known as ADC4
+     ADCSRA |= _BV(ADSC);
+     loop_until_bit_is_clear(ADCSRA, ADSC);
+     uint16_t brakePressureRaw = ADC >> 4;
+     // uint8_t bpMSB, bpLSB;
+
+     gBrake_Pressure[0] = (uint8_t)(brakePressureRaw >> 8);
+     gBrake_Pressure[1] = (uint8_t)brakePressureRaw;
+
+     // // Check for brake analog fault
+     // if(brake_pos_adc == 0) {
+     //     gCAN_MSG[0] = 0xFF;
+     //     // Send Global Panic
+     //     CAN_transmit(BROADCAST_MOb, CAN_ID_PANIC,
+     //         CAN_LEN_PANIC, gCAN_MSG);
+     }
+
+     // if(bit_is_set(gTimerFlag, SEND_BRAKE)) {
+     //     uint8_t mapped = ((brake_pos_adc - brake_LOW) * 0xFF) / (brake_HIGH - brake_LOW);
+     //     gCAN_MSG[CAN_BRAKE_POS] = mapped;
+     }
 }
 
 
@@ -338,6 +343,11 @@ int main(void){
             // Send CAN message
             CAN_transmit(5, CAN_ID_BRAKE_LIGHT,
                 CAN_LEN_BRAKE_LIGHT, gCAN_MSG);
+
+            CAN_transmit(5, CAN_ID_BRAKE_PRESSURE, CAN_LEN_BRAKE_PRESSURE,
+                gBrake_Pressure);
+
+            mapBrakePressure();
 
             // send_LED_bar();
 
