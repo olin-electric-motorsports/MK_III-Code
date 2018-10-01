@@ -114,7 +114,7 @@ uint8_t brake_LOW = 0xD3;        //TODO change with actual values
 // 8-bit Timer
 ISR(TIMER0_COMPA_vect) {
     // Only send CAN msgs every 20 cycles
-    if(clock_prescale > 4) {
+    if(clock_prescale > 40) {
         gTimerFlag |= _BV(UPDATE_STATUS);
         clock_prescale = 0;
     }
@@ -341,14 +341,13 @@ int main(void){
             updateStateFromFlags();     // Build CAN message based off flags
             gTimerFlag &= ~_BV(UPDATE_STATUS);  // Clear Flag
 
-
+            mapBrakePressure();
             // Send CAN message
-            CAN_transmit(2, CAN_ID_BRAKE_LIGHT,
+            CAN_transmit(5, CAN_ID_BRAKE_LIGHT,
                 CAN_LEN_BRAKE_LIGHT, gCAN_MSG);
 
-            mapBrakePressure();
 
-            CAN_transmit(3, CAN_ID_BRAKE_PRESSURE, CAN_LEN_BRAKE_PRESSURE,
+            CAN_transmit(5, CAN_ID_BRAKE_PRESSURE, CAN_LEN_BRAKE_PRESSURE,
                 gBrake_Pressure);
 
 
