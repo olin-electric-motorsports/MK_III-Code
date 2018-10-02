@@ -95,7 +95,7 @@ Author:
 volatile uint8_t gFlag = 0x01;          // Global Flag
 volatile uint8_t gTimerFlag = 0x01;     // Timer flag
 uint8_t gCAN_MSG[8] = {0, 0, 0, 0, 0, 0, 0, 0};  // CAN Message
-uint8_t gBrake_Pressure[2]; //brake pressure value
+uint8_t gBrake_Pressure[4]; //brake pressure value
 
 volatile uint8_t gTSMS = 0x00;
 volatile uint8_t gTSMS_OLD = 0x00;  // Used for comparison
@@ -281,11 +281,14 @@ static inline void mapBrakePressure() {
      ADMUX |= 4; //pin is also known as ADC4
      ADCSRA |= _BV(ADSC);
      loop_until_bit_is_clear(ADCSRA, ADSC);
+     uint16_t brakePressureADC = ADC;
      uint16_t brakePressureRaw = ADC << 6;
      // uint8_t bpMSB, bpLSB;
 
      gBrake_Pressure[0] = brakePressureRaw >> 8;
      gBrake_Pressure[1] = brakePressureRaw & 0x00FF;
+     gBrake_Pressure[2] = brakePressureADC >> 2;
+     gBrake_Pressure[3] = brakePressureADC;
 
      PORT_LED1 ^= _BV(LED1);     // Blink Orange LED for timing check
      PORT_EXT_LED_ORANGE ^= _BV(EXT_LED_ORANGE);
