@@ -51,7 +51,7 @@
 #define CAN_LEN_MC_VOLTAGE      ((uint16_t) 8)
 #define CAN_LEN_MC_COMMAND      ((uint16_t) 8)
 
-#define CAN_LEN_BRAKE_PRESSURE  ((uint16_t) 4)
+#define CAN_LEN_BRAKE_PRESSURE  ((uint16_t) 2)
 
 
 /* Masks */
